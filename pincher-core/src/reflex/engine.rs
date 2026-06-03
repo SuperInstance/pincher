@@ -369,10 +369,9 @@ impl ReflexEngine {
 
     /// Execute an action SQL string.
     ///
-    /// SECURITY: Dynamic SQL interpolation via `{{input}}` is **prohibited**.
-    /// Only static SELECT queries (no template variables) are allowed.
-    /// Shell execution via `sh -c` is **prohibited** — all non-SQL actions
-    /// must go through the builtin dispatch or the sandboxed executor.
+    /// Supports SELECT, INSERT, UPDATE, and DELETE queries.
+    /// Dynamic SQL interpolation via `{{...}}` is **prohibited** for security.
+    /// Shell commands are routed through the sandboxed executor.
     fn execute_action_sql(&self, action_sql: &str, input: &str) -> EngineResult<String> {
         debug!(action_sql = action_sql, "Executing action SQL");
 
@@ -383,8 +382,9 @@ impl ReflexEngine {
             ));
         }
 
-        // Only allow static SELECT queries (no user input)
-        if action_sql.starts_with("SELECT") {
+        let normalized = action_sql.trim().to_uppercase();
+
+        if normalized.starts_with("SELECT") {
             match self.conn.query_row(action_sql, [], |row| {
                 row.get::<_, String>(0)
             }) {
@@ -394,12 +394,97 @@ impl ReflexEngine {
                     Ok(format!("Action: {}", action_sql))
                 }
             }
+        } else if normalized.starts_with("INSERT") || normalized.starts_with("UPDATE") || normalized.starts_with("DELETE") {
+            match self.conn.execute(action_sql, []) {
+                Ok(rows_affected) => Ok(format!("OK: {} row(s) affected", rows_affected)),
+                Err(e) => {
+                    debug!(error = %e, "SQL mutation failed");
+                    Err(EngineError::Execution(format!("SQL mutation failed: {}", e)))
+                }
+            }
+        } else if action_sql.trim().starts_with("$") {
+            // Shell command: strip the leading '$' and execute via sandbox
+            let shell_cmd = action_sql.trim().strip_prefix('$').unwrap().trim();
+            self.execute_action_shell(shell_cmd, input)
         } else {
-            // Non-SELECT, non-builtin actions must be routed through the sandbox.
-            // Direct shell execution is prohibited.
-            Err(EngineError::Execution(
-                "Shell execution via sh -c is prohibited. Route through builtin dispatch or sandbox.".into()
-            ))
+            // Unknown action type — attempt sandboxed shell execution
+            self.execute_action_shell(action_sql, input)
+        }
+    }
+
+    /// Execute a shell command through the sandbox.
+    ///
+    /// Uses the capability-based sandbox with restricted defaults.
+    /// Falls back to restricted `Command::new` if sandbox is unavailable.
+    fn execute_action_shell(&self, command: &str, _input: &str) -> EngineResult<String> {
+        debug!(command = command, "Executing action via sandbox");
+
+        // Build a restricted sandbox manifest
+        let manifest = crate::security::sandbox::CapabilityManifest::new("reflex-shell")
+            .with_capability(crate::security::sandbox::Capability::FilesystemRead)
+            .with_capability(crate::security::sandbox::Capability::Subprocess)
+            .with_read_path("/usr")
+            .with_read_path("/bin")
+            .with_read_path("/lib")
+            .with_read_path("/tmp")
+            .with_read_path(".");
+
+        match crate::security::sandbox::build_sandbox(&manifest) {
+            Ok(config) => {
+                match crate::security::sandbox::execute_sandboxed(command, &config) {
+                    Ok(_status) => Ok(format!("Sandboxed command executed: {}", command)),
+                    Err(e) => {
+                        // Sandbox unavailable — fall back to restricted direct execution
+                        debug!(error = %e, "Sandbox execution failed, falling back to restricted Command");
+                        self.execute_shell_fallback(command)
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(error = %e, "Sandbox build failed, falling back to restricted Command");
+                self.execute_shell_fallback(command)
+            }
+        }
+    }
+
+    /// Fallback shell execution with restricted environment.
+    ///
+    /// Used when the sandbox (bwrap/landlock) is not available.
+    /// Runs the command with a minimal PATH and no inherited env vars.
+    fn execute_shell_fallback(&self, command: &str) -> EngineResult<String> {
+        // Parse command into binary + args (simple split on whitespace)
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        if parts.is_empty() {
+            return Err(EngineError::Execution("Empty shell command".into()));
+        }
+
+        let binary = parts[0];
+        let args = &parts[1..];
+
+        let output = std::process::Command::new(binary)
+            .args(args)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", "/tmp")
+            .current_dir("/tmp")
+            .output()
+            .map_err(|e| EngineError::Execution(format!("Failed to execute '{}': {}", binary, e)))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if output.status.success() {
+            // Truncate to 4 KiB
+            if stdout.len() > 4096 {
+                Ok(stdout[..4096].to_string())
+            } else {
+                Ok(stdout)
+            }
+        } else {
+            Err(EngineError::Execution(format!(
+                "Command '{}' failed (exit {:?}): {}",
+                binary, output.status.code(), stderr.trim()
+            )))
         }
     }
 

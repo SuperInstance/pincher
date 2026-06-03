@@ -1,0 +1,84 @@
+# packs/default.toml — Default reflex pack for PincherOS
+# 20 useful reflexes for common operations.
+# Install with: pincher unpack packs/default.toml
+# (or load via the migration/pack system)
+
+[[reflex]]
+intent = "list files"
+action = "ls -la"
+
+[[reflex]]
+intent = "list files in directory"
+action = "ls -la {{path}}"
+
+[[reflex]]
+intent = "find files by name"
+action = "find . -name '{{pattern}}' -type f"
+
+[[reflex]]
+intent = "search file contents"
+action = "grep -rn '{{pattern}}' ."
+
+[[reflex]]
+intent = "read file"
+action = "cat {{path}}"
+
+[[reflex]]
+intent = "show first lines of file"
+action = "head -n 20 {{path}}"
+
+[[reflex]]
+intent = "show last lines of file"
+action = "tail -n 20 {{path}}"
+
+[[reflex]]
+intent = "check disk usage"
+action = "df -h"
+
+[[reflex]]
+intent = "check directory size"
+action = "du -sh {{path}}"
+
+[[reflex]]
+intent = "check memory usage"
+action = "free -h"
+
+[[reflex]]
+intent = "show top processes"
+action = "top -b -n 1 | head -20"
+
+[[reflex]]
+intent = "list running processes"
+action = "ps aux --sort=-%mem | head -20"
+
+[[reflex]]
+intent = "git status"
+action = "git status"
+
+[[reflex]]
+intent = "git log"
+action = "git log --oneline -20"
+
+[[reflex]]
+intent = "git diff"
+action = "git diff"
+
+[[reflex]]
+intent = "git branches"
+action = "git branch -a"
+
+[[reflex]]
+intent = "list docker containers"
+action = "docker ps"
+
+[[reflex]]
+intent = "list docker images"
+action = "docker images"
+
+[[reflex]]
+intent = "show docker container logs"
+action = "docker logs --tail 50 {{container}}"
+
+[[reflex]]
+intent = "count lines in file"
+action = "wc -l {{path}}"

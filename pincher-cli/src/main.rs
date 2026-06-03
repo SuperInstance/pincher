@@ -80,6 +80,9 @@ enum Commands {
     /// Detailed hardware fingerprint
     ShellInfo,
 
+    /// Health check: verify ONNX model, SQLite, reflexes, embedding, disk
+    Doctor,
+
     /// List all stored reflexes with confidence scores
     Reflexes {
         /// Show detailed information for each reflex
@@ -606,6 +609,168 @@ fn cmd_shell_info(engine: &ReflexEngine) -> Result<()> {
     Ok(())
 }
 
+// ─── Doctor Command ──────────────────────────────────────────────────────────
+
+struct DoctorCheck {
+    name: String,
+    passed: bool,
+    message: String,
+}
+
+fn doctor_check(name: &str, passed: bool, message: &str) -> DoctorCheck {
+    DoctorCheck {
+        name: name.to_string(),
+        passed,
+        message: message.to_string(),
+    }
+}
+
+fn cmd_doctor(engine: &ReflexEngine) -> Result<()> {
+    println!("\n{}", "PincherOS Doctor — Health Check".bright_red().bold());
+    println!(
+        "{}",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
+    );
+
+    let mut checks: Vec<DoctorCheck> = Vec::new();
+
+    // 1. Embedding model check
+    let embedder = engine.embedder();
+    let model_loaded = embedder.is_loaded();
+    checks.push(doctor_check(
+        "ONNX Model",
+        model_loaded,
+        if model_loaded {
+            "Model loaded successfully"
+        } else {
+            "Model not loaded — running in fallback/hash mode"
+        },
+    ));
+
+    // 2. Embedding dimension check
+    let embed_dim = EMBEDDING_DIM;
+    checks.push(doctor_check(
+        "Embedding Dim",
+        embed_dim > 0,
+        &format!("Dimension: {}", embed_dim),
+    ));
+
+    // 3. SQLite accessibility
+    let conn = engine.connection();
+    let sqlite_ok = conn
+        .query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
+        .is_ok();
+    checks.push(doctor_check(
+        "SQLite",
+        sqlite_ok,
+        if sqlite_ok {
+            "Database accessible and responsive"
+        } else {
+            "FAILED — database not responding"
+        },
+    ));
+
+    // 4. Reflex count
+    let status = engine.get_status()?;
+    let has_reflexes = status.reflex_count > 0;
+    checks.push(doctor_check(
+        "Reflexes",
+        has_reflexes,
+        &format!(
+            "{} reflex(es) stored, {} action log entries",
+            status.reflex_count, status.action_log_count
+        ),
+    ));
+
+    // 5. Disk space check
+    let db_path_str = default_db_path();
+    let db_path = expand_tilde(&db_path_str);
+    let home_dir = db_path.parent().unwrap_or_else(|| std::path::Path::new("/tmp"));
+    let disk_info = std::fs::metadata(home_dir).ok().and_then(|_| {
+        let output = std::process::Command::new("df")
+            .args(["-h", home_dir.to_str().unwrap_or("/")])
+            .output()
+            .ok();
+        output.map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+    });
+    let disk_ok = disk_info.is_some();
+    checks.push(doctor_check(
+        "Disk Space",
+        disk_ok,
+        &disk_info
+            .map(|info| {
+                info.lines()
+                    .nth(1)
+                    .map(|l| {
+                        let parts: Vec<&str> = l.split_whitespace().collect();
+                        if parts.len() >= 4 {
+                            format!(
+                                "Total: {}, Used: {}, Avail: {}",
+                                parts.get(1).unwrap_or(&"?"),
+                                parts.get(2).unwrap_or(&"?"),
+                                parts.get(3).unwrap_or(&"?")
+                            )
+                        } else {
+                            "Disk space info available".to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| "Disk space info available".to_string())
+            })
+            .unwrap_or_else(|| "Could not determine disk space".to_string()),
+    ));
+
+    // 6. bwrap availability
+    let bwrap_available = std::process::Command::new("which")
+        .arg("bwrap")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    checks.push(doctor_check(
+        "Sandbox (bwrap)",
+        bwrap_available,
+        if bwrap_available {
+            "bubblewrap (bwrap) available — sandbox ready"
+        } else {
+            "bwrap not found — sandboxed execution unavailable"
+        },
+    ));
+
+    // Print report
+    println!();
+    let mut all_passed = true;
+    for check in &checks {
+        let status_icon = if check.passed {
+            "PASS".green()
+        } else {
+            all_passed = false;
+            "FAIL".red()
+        };
+        println!(
+            "  [{}] {:<20} {}",
+            status_icon,
+            check.name.cyan(),
+            check.message.dimmed()
+        );
+    }
+
+    println!();
+    if all_passed {
+        println!(
+            "  {} {}",
+            "OK".green(),
+            "All checks passed — PincherOS is healthy!".green().bold()
+        );
+    } else {
+        println!(
+            "  {} {}",
+            "!!".yellow(),
+            "Some checks failed — see above for details".yellow().bold()
+        );
+    }
+
+    Ok(())
+}
+
 fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
     let conn = engine.connection();
     let reflexes = get_all_reflexes(conn)?;
@@ -763,6 +928,10 @@ fn main() -> Result<()> {
         Commands::ShellInfo => {
             let engine = create_engine(&db_path)?;
             cmd_shell_info(&engine)
+        }
+        Commands::Doctor => {
+            let engine = create_engine(&db_path)?;
+            cmd_doctor(&engine)
         }
         Commands::Reflexes { verbose } => {
             let engine = create_engine(&db_path)?;
