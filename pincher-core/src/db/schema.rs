@@ -189,11 +189,13 @@ pub fn init_db(path: &Path) -> SqlResult<Connection> {
         std::fs::create_dir_all(parent).ok();
     }
 
+    // Register sqlite-vec extension BEFORE opening the connection.
+    // sqlite3_auto_extension must be called before Connection::open so
+    // that the vec0 virtual table module is available when tables are created.
+    register_sqlite_vec();
+
     let conn = Connection::open(path)?;
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-
-    // Load sqlite-vec extension
-    load_sqlite_vec(&conn)?;
 
     run_migrations(&conn)?;
     seed_builtins(&conn)?;
@@ -202,15 +204,32 @@ pub fn init_db(path: &Path) -> SqlResult<Connection> {
     Ok(conn)
 }
 
-/// Load the sqlite-vec extension into the connection.
-fn load_sqlite_vec(conn: &Connection) -> SqlResult<()> {
-    debug!("Loading sqlite-vec extension");
-    // sqlite-vec: load the extension via rusqlite's load_extension API
-    // The sqlite-vec crate provides a C library we load at runtime
-    unsafe {
-        conn.load_extension("vec0", None)?;
-    }
-    debug!("sqlite-vec extension loaded successfully");
+/// Register the sqlite-vec extension globally via `sqlite3_auto_extension`.
+///
+/// This must be called BEFORE any SQLite connections are opened. The
+/// registration is process-wide and idempotent — calling it multiple times
+/// is safe but unnecessary.
+fn register_sqlite_vec() {
+    static REGISTERED: std::sync::Once = std::sync::Once::new();
+    REGISTERED.call_once(|| {
+        debug!("Registering sqlite-vec extension (static auto-extension)");
+        unsafe {
+            rusqlite::ffi::sqlite3_auto_extension(Some(
+                std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ())
+            ));
+        }
+        debug!("sqlite-vec extension registered successfully");
+    });
+}
+
+/// Load the sqlite-vec extension into an already-opened connection.
+///
+/// This is only needed if the connection was opened before `register_sqlite_vec`
+/// was called. Prefer calling `register_sqlite_vec()` before opening connections.
+#[allow(dead_code)]
+fn load_sqlite_vec(_conn: &Connection) -> SqlResult<()> {
+    // No-op: the extension should already be registered via auto_extension.
+    // Keeping this function for API compatibility.
     Ok(())
 }
 

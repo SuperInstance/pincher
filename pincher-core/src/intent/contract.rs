@@ -279,14 +279,14 @@ impl IntentPattern {
         // Extract values between literals
         let mut placeholder_idx = 0;
         for (i, pos) in positions.iter().enumerate() {
-            if let Some(start) = pos {
+            if let &Some(start) = pos {
                 let end = start + literals[i].len();
 
                 if placeholder_idx < placeholders.len() {
                     // Value before this literal
                     let prev_end = if i == 0 {
                         0
-                    } else if let Some(prev_pos) = positions[i - 1] {
+                    } else if let Some(&prev_pos) = positions.get(i - 1).and_then(|p| p.as_ref()) {
                         prev_pos + literals[i - 1].len()
                     } else {
                         0
@@ -871,19 +871,18 @@ mod tests {
     #[test]
     fn test_from_toml_str() {
         let toml = r#"
-[contract]
 name = "greeting"
 confidence_threshold = 0.7
 priority = 60
 conflict_strategy = "first_match"
 
-[[contract.patterns]]
+[[patterns]]
 template = "say hello to {name}"
 
-[[contract.patterns]]
+[[patterns]]
 template = "greet {name}"
 
-[contract.action]
+[action]
 template = "greet {{name}}"
 "#;
 

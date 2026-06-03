@@ -6,7 +6,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::*;
-use pincher_core::{DbStats, Embedder, Reflex, ReflexEngine, ShellFingerprint};
+use pincher_core::{
+    ReflexEngine, Reflex, EngineStatus,
+    ShellFingerprint, EMBEDDING_DIM,
+    pack_nail, unpack_nail, fingerprint as capture_fingerprint,
+    db::schema::get_all_reflexes,
+};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -37,7 +42,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show current shell fingerprint, DB stats, resource state
+    /// Show current engine status, reflex count, resource state
     Status,
 
     /// Interactive teach flow: prompt for intent + action, store reflex
@@ -57,12 +62,6 @@ enum Commands {
         intent: String,
     },
 
-    /// Show what would match without executing
-    Match {
-        /// Natural language intent to match
-        intent: String,
-    },
-
     /// Pack current state into .nail file for migration
     Pack {
         /// Output file path (default: pincher-state.nail)
@@ -75,7 +74,7 @@ enum Commands {
         nail: PathBuf,
     },
 
-    /// Run benchmark: embed latency, match latency, teach latency
+    /// Run benchmark: embed latency, teach latency, match latency
     Bench,
 
     /// Detailed hardware fingerprint
@@ -86,13 +85,6 @@ enum Commands {
         /// Show detailed information for each reflex
         #[arg(long)]
         verbose: bool,
-    },
-
-    /// Start JSON-RPC server for Python sidecar
-    Rpc {
-        /// Port to listen on
-        #[arg(long, default_value = "9876")]
-        port: u16,
     },
 }
 
@@ -124,13 +116,12 @@ fn init_tracing(level: &str) {
         .init();
 }
 
-async fn create_engine(db_path: &str) -> Result<ReflexEngine> {
+fn create_engine(db_path: &str) -> Result<ReflexEngine> {
     let path = expand_tilde(db_path);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let embedder = Embedder::new()?;
-    let engine = ReflexEngine::new(&path, embedder)?;
+    let engine = ReflexEngine::open(&path, None)?;
     Ok(engine)
 }
 
@@ -142,34 +133,46 @@ fn prompt(prompt_text: &str) -> Result<String> {
     Ok(input.trim().to_string())
 }
 
-fn print_crab_status(fingerprint: &ShellFingerprint, stats: &DbStats) {
+fn get_current_fingerprint() -> ShellFingerprint {
+    capture_fingerprint().unwrap_or_else(|_| ShellFingerprint {
+        hostname: "unknown".to_string(),
+        os: std::env::consts::OS.to_string(),
+        os_version: "unknown".to_string(),
+        cpu_count: 1,
+        ram_mb: 0,
+        gpu: "unknown".to_string(),
+        mac_hash: "unknown".to_string(),
+    })
+}
+
+fn print_crab_status(fp: &ShellFingerprint, status: &EngineStatus) {
     println!();
     println!(
         "{}",
-        format!("   🦀 PincherOS v{}", VERSION).bright_red().bold()
+        format!("   PincherOS v{}", VERSION).bright_red().bold()
     );
-    println!("{}", "  ╱╱╱╱╱╱╱╱╱╱╱╱╱".yellow());
+    println!("{}", "  ////////////////////////".yellow());
     println!(
         "{} {}",
-        " ╱".yellow(),
-        format!("Shell: {}  ╲", fingerprint.hostname).green()
-    );
-    println!(
-        "{} {}",
-        "╱".yellow(),
-        format!("   Reflexes: {}    ╲", stats.reflex_count).green()
+        " //".yellow(),
+        format!("Shell: {}  \\\\", fp.hostname).green()
     );
     println!(
         "{} {}",
-        "╲".yellow(),
-        "   State: Normal        ╱".green()
+        "//".yellow(),
+        format!("   Reflexes: {}    \\\\", status.reflex_count).green()
     );
     println!(
         "{} {}",
-        " ╲".yellow(),
-        format!("  RAM: {:.1}%       ╱", fingerprint.ram_usage_percent).green()
+        "\\\\".yellow(),
+        "   State: Normal        //".green()
     );
-    println!("{}", "  ╰────────────────────╯".yellow());
+    println!(
+        "{} {}",
+        " \\\\".yellow(),
+        format!("  RAM: {}MB       //", fp.ram_mb).green()
+    );
+    println!("{}", "  ////////////////////////".yellow());
     println!();
 }
 
@@ -184,36 +187,51 @@ fn print_timing(label: &str, duration: std::time::Duration) {
 
 // ─── Command Implementations ─────────────────────────────────────────────────
 
-async fn cmd_status(engine: &ReflexEngine) -> Result<()> {
-    let fingerprint = engine.shell_fingerprint();
-    let stats = engine.db_stats();
+fn cmd_status(engine: &mut ReflexEngine) -> Result<()> {
+    let fp = get_current_fingerprint();
+    let status = engine.get_status()?;
 
-    print_crab_status(&fingerprint, &stats);
+    print_crab_status(&fp, &status);
 
-    println!("  {} {}", "OS:".dimmed(), fingerprint.os);
-    println!("  {} {}", "Arch:".dimmed(), fingerprint.arch);
-    println!("  {} {}", "CPU Cores:".dimmed(), fingerprint.cpu_cores);
+    println!("  {} {}", "OS:".dimmed(), fp.os);
+    println!("  {} {}", "OS Version:".dimmed(), fp.os_version);
+    println!("  {} {}", "CPU Cores:".dimmed(), fp.cpu_count);
     println!(
         "  {} {}",
         "Total RAM:".dimmed(),
-        format!("{:.1} GB", fingerprint.total_ram_gb)
+        format!("{:.1} GB", fp.ram_mb as f64 / 1024.0)
     );
     println!(
         "  {} {}",
-        "DB Size:".dimmed(),
-        format!("{:.2} KB", stats.db_size_bytes as f64 / 1024.0)
+        "GPU:".dimmed(),
+        fp.gpu
+    );
+    println!(
+        "  {} {}",
+        "Reflexes:".dimmed(),
+        status.reflex_count
+    );
+    println!(
+        "  {} {}",
+        "Action Log:".dimmed(),
+        status.action_log_count
     );
     println!(
         "  {} {}",
         "Embed Dim:".dimmed(),
-        engine.embedder().dimension()
+        EMBEDDING_DIM
+    );
+    println!(
+        "  {} {}",
+        "Model Loaded:".dimmed(),
+        if status.embedder_loaded { "yes".green() } else { "no (fallback mode)".yellow() }
     );
 
     Ok(())
 }
 
-async fn cmd_teach(engine: &ReflexEngine, intent: Option<String>, action: Option<String>) -> Result<()> {
-    println!("\n{}", "🦀 Teach PincherOS a new reflex".bright_red().bold());
+fn cmd_teach(engine: &mut ReflexEngine, intent: Option<String>, action: Option<String>) -> Result<()> {
+    println!("\n{}", "Teach PincherOS a new reflex".bright_red().bold());
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
@@ -249,16 +267,16 @@ async fn cmd_teach(engine: &ReflexEngine, intent: Option<String>, action: Option
 
     println!(
         "\n  {} Storing reflex...",
-        "⏳".to_string().yellow()
+        "...".yellow()
     );
 
     let start = Instant::now();
-    let reflex = engine.teach(&intent, &action).await?;
+    let reflex = engine.teach(&intent, &action)?;
     let elapsed = start.elapsed();
 
     println!(
         "\n  {} {}",
-        "✓".to_string().green(),
+        "OK".green(),
         "Reflex stored!".green().bold()
     );
     println!("  {} {}", "  ID:".dimmed(), reflex.id);
@@ -269,117 +287,68 @@ async fn cmd_teach(engine: &ReflexEngine, intent: Option<String>, action: Option
         "  Confidence:".dimmed(),
         format!("{:.2}", reflex.confidence)
     );
-    println!("  {} {}", "  Created:".dimmed(), reflex.created_at);
     print_timing("  Time", elapsed);
 
     Ok(())
 }
 
-async fn cmd_do(engine: &ReflexEngine, intent: &str) -> Result<()> {
-    println!("\n{}", format!("🦀 Executing: \"{}\"", intent).bright_red().bold());
+fn cmd_do(engine: &mut ReflexEngine, intent: &str) -> Result<()> {
+    println!("\n{}", format!("Executing: \"{}\"", intent).bright_red().bold());
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
     );
 
     let start = Instant::now();
-    let result = engine.do_command(intent).await?;
+    let execution = engine.do_command(intent)?;
     let elapsed = start.elapsed();
 
-    match result {
-        Some(action) => {
-            println!(
-                "\n  {} {}",
-                "✓".to_string().green(),
-                "Matched reflex:".green().bold()
-            );
-            println!("  {} {}", "  Action:".dimmed(), action.cyan());
-            print_timing("  Time", elapsed);
-        }
-        None => {
-            println!(
-                "\n  {} {}",
-                "✗".to_string().red(),
-                "No matching reflex found".red().bold()
-            );
-            println!(
-                "  {}",
-                "  Try 'pincher teach' to add one.".dimmed()
-            );
-            print_timing("  Time", elapsed);
-        }
+    if let Some(reflex_id) = &execution.reflex_id {
+        println!(
+            "\n  {} {}",
+            "OK".green(),
+            "Matched reflex:".green().bold()
+        );
+        println!("  {} {}", "  Reflex ID:".dimmed(), reflex_id.cyan());
+        println!("  {} {}", "  Match Type:".dimmed(), format!("{:?}", execution.match_type).cyan());
+        println!(
+            "  {} {}",
+            "  Confidence:".dimmed(),
+            format!("{:.4}", execution.confidence)
+        );
+        println!("  {} {}", "  Output:".dimmed(), truncate(&execution.output, 120));
+    } else {
+        println!(
+            "\n  {} {}",
+            "X".red(),
+            "No matching reflex found".red().bold()
+        );
+        println!(
+            "  {}",
+            "  Try 'pincher teach' to add one.".dimmed()
+        );
     }
+    print_timing("  Time", elapsed);
 
     Ok(())
 }
 
-async fn cmd_match(engine: &ReflexEngine, intent: &str) -> Result<()> {
-    println!(
-        "\n{}",
-        format!("🦀 Matching: \"{}\"", intent).bright_red().bold()
-    );
-    println!(
-        "{}",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
-    );
-    println!(
-        "  {} {}",
-        "ℹ".to_string().blue(),
-        "Dry run — no execution".blue()
-    );
-
-    let start = Instant::now();
-    let result = engine.match_reflex(intent).await?;
-    let elapsed = start.elapsed();
-
-    match result {
-        Some(reflex) => {
-            println!(
-                "\n  {} {}",
-                "✓".to_string().green(),
-                "Would match:".green().bold()
-            );
-            println!("  {} {}", "  Intent:".dimmed(), reflex.intent);
-            println!("  {} {}", "  Action:".dimmed(), reflex.action.cyan());
-            println!(
-                "  {} {}",
-                "  Confidence:".dimmed(),
-                format!("{:.2}", reflex.confidence)
-            );
-            println!(
-                "  {} {}",
-                "  Invoked:".dimmed(),
-                reflex.invoked_count
-            );
-            print_timing("  Time", elapsed);
-        }
-        None => {
-            println!(
-                "\n  {} {}",
-                "✗".to_string().red(),
-                "No matching reflex".red().bold()
-            );
-            print_timing("  Time", elapsed);
-        }
-    }
-
-    Ok(())
-}
-
-async fn cmd_pack(engine: &ReflexEngine, output: Option<PathBuf>) -> Result<()> {
+fn cmd_pack(_engine: &ReflexEngine, output: Option<PathBuf>) -> Result<()> {
     let output_path = output.unwrap_or_else(|| PathBuf::from("pincher-state.nail"));
 
     println!(
         "\n{}",
-        format!("🦀 Packing state to {}", output_path.display()).bright_red().bold()
+        format!("Packing state to {}", output_path.display()).bright_red().bold()
     );
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
     );
 
+    let db_path = expand_tilde(&default_db_path());
+
     let start = Instant::now();
-    engine.pack(&output_path)?;
+    pack_nail(&db_path, &output_path)?;
     let elapsed = start.elapsed();
 
     let file_size = std::fs::metadata(&output_path)
@@ -388,7 +357,7 @@ async fn cmd_pack(engine: &ReflexEngine, output: Option<PathBuf>) -> Result<()> 
 
     println!(
         "\n  {} {}",
-        "✓".to_string().green(),
+        "OK".green(),
         "State packed!".green().bold()
     );
     println!("  {} {}", "  File:".dimmed(), output_path.display());
@@ -402,37 +371,38 @@ async fn cmd_pack(engine: &ReflexEngine, output: Option<PathBuf>) -> Result<()> 
     Ok(())
 }
 
-async fn cmd_unpack(engine: &ReflexEngine, nail_path: &PathBuf) -> Result<()> {
+fn cmd_unpack(nail_path: &PathBuf, db_path: &str) -> Result<()> {
     println!(
         "\n{}",
-        format!("🦀 Unpacking from {}", nail_path.display()).bright_red().bold()
+        format!("Unpacking from {}", nail_path.display()).bright_red().bold()
     );
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
     );
 
-    let start = Instant::now();
-    engine.unpack(nail_path).await?;
-    let elapsed = start.elapsed();
+    let output_dir = expand_tilde(db_path).parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
 
-    let count = engine.reflex_count()?;
+    let start = Instant::now();
+    unpack_nail(nail_path, &output_dir)?;
+    let elapsed = start.elapsed();
 
     println!(
         "\n  {} {}",
-        "✓".to_string().green(),
-        "State unpacked and merged!".green().bold()
+        "OK".green(),
+        "State unpacked!".green().bold()
     );
-    println!("  {} {}", "  Total reflexes:".dimmed(), count);
     print_timing("  Time", elapsed);
 
     Ok(())
 }
 
-async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
+fn cmd_bench(engine: &mut ReflexEngine) -> Result<()> {
     println!(
         "\n{}",
-        "🦀 PincherOS Benchmark Suite".bright_red().bold()
+        "PincherOS Benchmark Suite".bright_red().bold()
     );
     println!(
         "{}",
@@ -442,9 +412,9 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     let embedder = engine.embedder();
 
     // 1. Single embed latency
-    print!("  {} Embedding single text...", "⏳".to_string().yellow());
+    print!("  {} Embedding single text...", "...".yellow());
     let start = Instant::now();
-    embedder.embed("hello world").await?;
+    embedder.embed("hello world")?;
     let single_embed = start.elapsed();
     println!(
         " {}",
@@ -454,27 +424,22 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     // 2. Batch embed (10x) latency
     print!(
         "  {} Embedding batch (10x)...",
-        "⏳".to_string().yellow()
+        "...".yellow()
     );
-    let texts: Vec<&str> = (0..10)
-        .map(|i| {
-            match i {
-                0 => "open the browser",
-                1 => "show me the files",
-                2 => "connect to server",
-                3 => "list all processes",
-                4 => "kill the daemon",
-                5 => "start the service",
-                6 => "check disk usage",
-                7 => "display network stats",
-                8 => "update the system",
-                9 => "clean temp files",
-                _ => "unknown",
-            }
-        })
-        .collect();
+    let texts: Vec<&str> = [
+        "open the browser",
+        "show me the files",
+        "connect to server",
+        "list all processes",
+        "kill the daemon",
+        "start the service",
+        "check disk usage",
+        "display network stats",
+        "update the system",
+        "clean temp files",
+    ].to_vec();
     let start = Instant::now();
-    embedder.embed_batch(&texts).await?;
+    embedder.batch_embed(&texts)?;
     let batch_embed = start.elapsed();
     println!(
         " {}",
@@ -484,7 +449,7 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     // 3. Teach latency (with seeding)
     print!(
         "  {} Seeding 10 reflexes...",
-        "⏳".to_string().yellow()
+        "...".yellow()
     );
     let seed_intents = [
         ("open browser", "xdg-open https://example.com"),
@@ -500,7 +465,7 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     ];
     let start = Instant::now();
     for (intent, action) in &seed_intents {
-        engine.teach(intent, action).await?;
+        engine.teach(intent, action)?;
     }
     let teach_total = start.elapsed();
     let teach_avg = teach_total / 10;
@@ -509,34 +474,15 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
         format!("{:.2}ms avg", teach_avg.as_secs_f64() * 1000.0).cyan()
     );
 
-    // 4. Match latency
-    print!("  {} Matching reflex...", "⏳".to_string().yellow());
-    let start = Instant::now();
-    let match_count = 100;
-    for _ in 0..match_count {
-        let _ = engine.match_reflex("show me the files").await?;
-    }
-    let match_total = start.elapsed();
-    let match_avg = match_total / match_count;
-    println!(
-        " {}",
-        format!(
-            "{:.2}ms avg ({} iterations)",
-            match_avg.as_secs_f64() * 1000.0,
-            match_count
-        )
-        .cyan()
-    );
-
-    // 5. Full do_command latency
+    // 4. Full do_command latency
     print!(
         "  {} Full do_command...",
-        "⏳".to_string().yellow()
+        "...".yellow()
     );
     let start = Instant::now();
     let do_count = 50;
     for _ in 0..do_count {
-        let _ = engine.do_command("check memory").await?;
+        let _ = engine.do_command("check memory");
     }
     let do_total = start.elapsed();
     let do_avg = do_total / do_count;
@@ -554,28 +500,26 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     println!();
     println!(
         "{}",
-        "  ┌─────────────────────────┬──────────────┬───────┐".dimmed()
+        "  +-------------------------+--------------+-------+".dimmed()
     );
     println!(
         "{}",
-        "  │ Benchmark               │ Latency      │ Status│".dimmed()
+        "  | Benchmark               | Latency      | Status|".dimmed()
     );
     println!(
         "{}",
-        "  ├─────────────────────────┼──────────────┼───────┤".dimmed()
+        "  +-------------------------+--------------+-------+".dimmed()
     );
 
     let single_pass = single_embed.as_secs_f64() * 1000.0 < 50.0;
     let batch_pass = batch_embed.as_secs_f64() * 1000.0 < 500.0;
     let teach_pass = teach_avg.as_secs_f64() * 1000.0 < 50.0;
-    let match_pass = match_avg.as_secs_f64() * 1000.0 < 50.0;
     let do_pass = do_avg.as_secs_f64() * 1000.0 < 50.0;
 
     for (label, latency_ms, pass) in [
         ("Single Embed", single_embed.as_secs_f64() * 1000.0, single_pass),
         ("Batch Embed (10x)", batch_embed.as_secs_f64() * 1000.0, batch_pass),
         ("Teach (avg)", teach_avg.as_secs_f64() * 1000.0, teach_pass),
-        ("Match (avg)", match_avg.as_secs_f64() * 1000.0, match_pass),
         ("Do Command (avg)", do_avg.as_secs_f64() * 1000.0, do_pass),
     ] {
         let status = if pass {
@@ -584,30 +528,29 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
             "  FAIL".red()
         };
         println!(
-            "  {} {} {} {}",
-            "│".dimmed(),
-            format!("{:<23}", label),
-            format!("{:>10.2}ms", latency_ms),
-            format!("{} {}", "│", status),
+            "  | {:<23} {:>10.2}ms |{} |",
+            label,
+            latency_ms,
+            status,
         );
     }
 
     println!(
         "{}",
-        "  └─────────────────────────┴──────────────┴───────┘".dimmed()
+        "  +-------------------------+--------------+-------+".dimmed()
     );
 
-    let all_pass = single_pass && batch_pass && teach_pass && match_pass && do_pass;
+    let all_pass = single_pass && batch_pass && teach_pass && do_pass;
     if all_pass {
         println!(
             "\n  {} {}",
-            "✓".to_string().green(),
+            "OK".green(),
             "All benchmarks passed!".green().bold()
         );
     } else {
         println!(
             "\n  {} {}",
-            "⚠".to_string().yellow(),
+            "!!".yellow(),
             "Some benchmarks exceeded thresholds".yellow().bold()
         );
     }
@@ -615,44 +558,42 @@ async fn cmd_bench(engine: &ReflexEngine) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_shell_info(engine: &ReflexEngine) -> Result<()> {
-    let fp = engine.shell_fingerprint();
+fn cmd_shell_info(engine: &ReflexEngine) -> Result<()> {
+    let fp = get_current_fingerprint();
 
-    println!("\n{}", "🦀 Shell Fingerprint".bright_red().bold());
+    println!("\n{}", "Shell Fingerprint".bright_red().bold());
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
     );
 
-    println!("\n  {} Hardware", "━━".cyan().bold());
+    println!("\n  {} Hardware", "==".cyan().bold());
     println!("  {} {}", "Hostname:".dimmed(), fp.hostname);
     println!("  {} {}", "OS:".dimmed(), fp.os);
-    println!("  {} {}", "Architecture:".dimmed(), fp.arch);
-    println!("  {} {}", "CPU Cores:".dimmed(), fp.cpu_cores);
+    println!("  {} {}", "OS Version:".dimmed(), fp.os_version);
+    println!("  {} {}", "Architecture:".dimmed(), std::env::consts::ARCH);
+    println!("  {} {}", "CPU Cores:".dimmed(), fp.cpu_count);
     println!(
         "  {} {}",
         "Total RAM:".dimmed(),
-        format!("{:.2} GB", fp.total_ram_gb)
+        format!("{:.2} GB", fp.ram_mb as f64 / 1024.0)
     );
     println!(
         "  {} {}",
-        "RAM Usage:".dimmed(),
-        format!("{:.1}%", fp.ram_usage_percent)
+        "GPU:".dimmed(),
+        fp.gpu
     );
 
-    println!("\n  {} Runtime", "━━".cyan().bold());
-    println!("  {} {}", "Embedding Dim:".dimmed(), engine.embedder().dimension());
+    println!("\n  {} Runtime", "==".cyan().bold());
+    println!("  {} {}", "Embedding Dim:".dimmed(), EMBEDDING_DIM);
+    println!("  {} {}", "Model Loaded:".dimmed(), engine.embedder().is_loaded());
     println!("  {} {}", "DB Path:".dimmed(), default_db_path());
 
-    let stats = engine.db_stats();
-    println!("  {} {}", "Reflexes:".dimmed(), stats.reflex_count);
-    println!(
-        "  {} {}",
-        "DB Size:".dimmed(),
-        format!("{:.2} KB", stats.db_size_bytes as f64 / 1024.0)
-    );
+    let status = engine.get_status()?;
+    println!("  {} {}", "Reflexes:".dimmed(), status.reflex_count);
+    println!("  {} {}", "Action Log:".dimmed(), status.action_log_count);
 
-    println!("\n  {} Environment", "━━".cyan().bold());
+    println!("\n  {} Environment", "==".cyan().bold());
     println!("  {} {}", "PID:".dimmed(), std::process::id());
     println!(
         "  {} {}",
@@ -661,19 +602,15 @@ async fn cmd_shell_info(engine: &ReflexEngine) -> Result<()> {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| "unknown".to_string())
     );
-    println!(
-        "  {} {}",
-        "Rust Version:".dimmed(),
-        "1.78.0"
-    );
 
     Ok(())
 }
 
-async fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
-    let reflexes = engine.list_reflexes()?;
+fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
+    let conn = engine.connection();
+    let reflexes = get_all_reflexes(conn)?;
 
-    println!("\n{}", "🦀 Stored Reflexes".bright_red().bold());
+    println!("\n{}", "Stored Reflexes".bright_red().bold());
     println!(
         "{}",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
@@ -682,7 +619,7 @@ async fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
     if reflexes.is_empty() {
         println!(
             "\n  {} No reflexes stored yet.",
-            "∅".to_string().dimmed()
+            "-".dimmed()
         );
         println!(
             "  {}",
@@ -692,20 +629,22 @@ async fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
     }
 
     println!(
-        "\n  {} {} reflexes found\n",
-        "📋".to_string(),
+        "\n  {} reflexes found\n",
         reflexes.len()
     );
 
+    // Convert to Reflex for display
+    let display_reflexes: Vec<Reflex> = reflexes.into_iter().map(|r| r.into()).collect();
+
     if verbose {
-        for reflex in &reflexes {
+        for reflex in &display_reflexes {
             print_reflex_detail(reflex);
         }
     } else {
         // Compact table
         println!(
             "  {} {} {} {} {}",
-            "ID".dimmed().to_string().pad_to_width(5),
+            "ID".dimmed().to_string().pad_to_width(8),
             "Intent".dimmed().to_string().pad_to_width(25),
             "Action".dimmed().to_string().pad_to_width(25),
             "Confidence".dimmed().to_string().pad_to_width(12),
@@ -713,18 +652,18 @@ async fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
         );
         println!(
             "  {}",
-            "─────────────────────────────────────────────────────".dimmed()
+            "-------------------------------------------------------------".dimmed()
         );
 
-        for reflex in &reflexes {
+        for reflex in &display_reflexes {
             let confidence_bar = confidence_bar(reflex.confidence);
             println!(
-                "  {:<5} {:<25} {:<25} {} {:>6}",
-                reflex.id,
+                "  {:<8} {:<25} {:<25} {} {:>6}",
+                truncate(&reflex.id, 8),
                 truncate(&reflex.intent, 25),
                 truncate(&reflex.action, 25),
                 confidence_bar,
-                reflex.invoked_count,
+                reflex.invoke_count,
             );
         }
     }
@@ -733,7 +672,7 @@ async fn cmd_reflexes(engine: &ReflexEngine, verbose: bool) -> Result<()> {
 }
 
 fn print_reflex_detail(reflex: &Reflex) {
-    println!("  {} {}", "── Reflex #".dimmed(), reflex.id.to_string().cyan());
+    println!("  {} {}", "-- Reflex #".dimmed(), reflex.id.to_string().cyan());
     println!("  {} {}", "    Intent:".dimmed(), reflex.intent);
     println!("  {} {}", "    Action:".dimmed(), reflex.action.cyan());
     println!(
@@ -741,8 +680,7 @@ fn print_reflex_detail(reflex: &Reflex) {
         "    Confidence:".dimmed(),
         format!("{:.4}", reflex.confidence)
     );
-    println!("  {} {}", "    Created:".dimmed(), reflex.created_at);
-    println!("  {} {}", "    Invoked:".dimmed(), reflex.invoked_count);
+    println!("  {} {}", "    Invoked:".dimmed(), reflex.invoke_count);
     println!();
 }
 
@@ -751,8 +689,8 @@ fn confidence_bar(confidence: f64) -> String {
     let filled = (confidence * width as f64).round() as usize;
     let empty = width - filled;
 
-    let bar: String = "█".repeat(filled);
-    let space: String = "░".repeat(empty);
+    let bar: String = "#".repeat(filled);
+    let space: String = "-".repeat(empty);
 
     if confidence >= 0.8 {
         format!("{}{} {}", bar.green(), space.dimmed(), format!("{:.2}", confidence).green())
@@ -767,239 +705,8 @@ fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}…", &s[..max_len - 1])
+        format!("{}~", &s[..max_len - 1])
     }
-}
-
-async fn cmd_rpc(engine: &ReflexEngine, port: u16) -> Result<()> {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-    use tokio::net::TcpListener;
-
-    let addr = format!("127.0.0.1:{}", port);
-    let listener = TcpListener::bind(&addr).await?;
-
-    println!(
-        "\n{}",
-        format!("🦀 PincherOS JSON-RPC Server").bright_red().bold()
-    );
-    println!(
-        "{}",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".dimmed()
-    );
-    println!(
-        "\n  {} Listening on {}",
-        "✓".to_string().green(),
-        addr.cyan()
-    );
-    println!(
-        "  {} {}",
-        "ℹ".to_string().blue(),
-        "Press Ctrl+C to stop".blue()
-    );
-
-    // We need to share the engine across connections.
-    // Since ReflexEngine uses rusqlite::Connection which is not Send+Sync,
-    // we'll handle requests sequentially for simplicity.
-    loop {
-        let (stream, addr) = listener.accept().await?;
-        println!("  {} Client connected: {}", "→".to_string().dimmed(), addr);
-
-        let (reader, mut writer) = stream.into_split();
-        let mut reader = BufReader::new(reader);
-        let mut line = String::new();
-
-        loop {
-            line.clear();
-            match reader.read_line(&mut line).await {
-                Ok(0) => {
-                    println!(
-                        "  {} Client disconnected: {}",
-                        "←".to_string().dimmed(),
-                        addr
-                    );
-                    break;
-                }
-                Ok(_) => {
-                    let request = line.trim().to_string();
-                    if request.is_empty() {
-                        continue;
-                    }
-
-                    let response = handle_rpc_request(engine, &request).await;
-
-                    let response_str = match serde_json::to_string(&response) {
-                        Ok(s) => s,
-                        Err(e) => serde_json::to_string(&serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "error": {"code": -32603, "message": format!("Internal error: {}", e)},
-                            "id": null
-                        }))
-                        .unwrap_or_else(|_| "{}".to_string()),
-                    };
-
-                    if let Err(e) = writer.write_all(format!("{}\n", response_str).as_bytes()).await {
-                        println!("  {} Write error: {}", "✗".to_string().red(), e);
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("  {} Read error: {}", "✗".to_string().red(), e);
-                    break;
-                }
-            }
-        }
-    }
-}
-
-async fn handle_rpc_request(engine: &ReflexEngine, request: &str) -> serde_json::Value {
-    let msg: serde_json::Value = match serde_json::from_str(request) {
-        Ok(v) => v,
-        Err(e) => {
-            return serde_json::json!({
-                "jsonrpc": "2.0",
-                "error": {"code": -32700, "message": format!("Parse error: {}", e)},
-                "id": null
-            });
-        }
-    };
-
-    let id = msg.get("id").cloned().unwrap_or(serde_json::Value::Null);
-    let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
-    let params = msg.get("params").cloned().unwrap_or(serde_json::Value::Null);
-
-    let result = match method {
-        "status" => {
-            let fp = engine.shell_fingerprint();
-            let stats = engine.db_stats();
-            serde_json::json!({
-                "version": VERSION,
-                "hostname": fp.hostname,
-                "os": fp.os,
-                "arch": fp.arch,
-                "cpu_cores": fp.cpu_cores,
-                "total_ram_gb": fp.total_ram_gb,
-                "ram_usage_percent": fp.ram_usage_percent,
-                "reflex_count": stats.reflex_count,
-                "db_size_bytes": stats.db_size_bytes,
-            })
-        }
-        "teach" => {
-            let intent = params.get("intent").and_then(|p| p.as_str()).unwrap_or("");
-            let action = params.get("action").and_then(|p| p.as_str()).unwrap_or("");
-            if intent.is_empty() || action.is_empty() {
-                return serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32602, "message": "Missing 'intent' or 'action' params"},
-                    "id": id
-                });
-            }
-            match engine.teach(intent, action).await {
-                Ok(reflex) => serde_json::json!({
-                    "id": reflex.id,
-                    "intent": reflex.intent,
-                    "action": reflex.action,
-                    "confidence": reflex.confidence,
-                    "created_at": reflex.created_at,
-                }),
-                Err(e) => {
-                    return serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": format!("Teach error: {}", e)},
-                        "id": id
-                    });
-                }
-            }
-        }
-        "match" => {
-            let intent = params.get("intent").and_then(|p| p.as_str()).unwrap_or("");
-            if intent.is_empty() {
-                return serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32602, "message": "Missing 'intent' param"},
-                    "id": id
-                });
-            }
-            match engine.match_reflex(intent).await {
-                Ok(Some(reflex)) => serde_json::json!({
-                    "matched": true,
-                    "reflex": {
-                        "id": reflex.id,
-                        "intent": reflex.intent,
-                        "action": reflex.action,
-                        "confidence": reflex.confidence,
-                    }
-                }),
-                Ok(None) => serde_json::json!({"matched": false}),
-                Err(e) => {
-                    return serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": format!("Match error: {}", e)},
-                        "id": id
-                    });
-                }
-            }
-        }
-        "do" => {
-            let intent = params.get("intent").and_then(|p| p.as_str()).unwrap_or("");
-            if intent.is_empty() {
-                return serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32602, "message": "Missing 'intent' param"},
-                    "id": id
-                });
-            }
-            match engine.do_command(intent).await {
-                Ok(Some(action)) => serde_json::json!({
-                    "executed": true,
-                    "action": action
-                }),
-                Ok(None) => serde_json::json!({"executed": false}),
-                Err(e) => {
-                    return serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": format!("Do error: {}", e)},
-                        "id": id
-                    });
-                }
-            }
-        }
-        "list" => {
-            match engine.list_reflexes() {
-                Ok(reflexes) => {
-                    let list: Vec<serde_json::Value> = reflexes.iter().map(|r| {
-                        serde_json::json!({
-                            "id": r.id,
-                            "intent": r.intent,
-                            "action": r.action,
-                            "confidence": r.confidence,
-                            "invoked_count": r.invoked_count,
-                        })
-                    }).collect();
-                    serde_json::json!({"reflexes": list})
-                }
-                Err(e) => {
-                    return serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": format!("List error: {}", e)},
-                        "id": id
-                    });
-                }
-            }
-        }
-        _ => {
-            return serde_json::json!({
-                "jsonrpc": "2.0",
-                "error": {"code": -32601, "message": format!("Method not found: {}", method)},
-                "id": id
-            });
-        }
-    };
-
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "result": result,
-        "id": id
-    })
 }
 
 // ─── Trait helper for padding ────────────────────────────────────────────────
@@ -1021,39 +728,54 @@ impl PadToWidth for String {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     init_tracing(&cli.log_level);
 
     let db_path = cli.db.unwrap_or_else(default_db_path);
-    let engine = create_engine(&db_path).await?;
-
     let overall_start = Instant::now();
 
-    let is_long_running = matches!(cli.command, Commands::Rpc { .. } | Commands::Bench);
-
     let result = match cli.command {
-        Commands::Status => cmd_status(&engine).await,
-        Commands::Teach { intent, action } => cmd_teach(&engine, intent, action).await,
-        Commands::Do { intent } => cmd_do(&engine, &intent).await,
-        Commands::Match { intent } => cmd_match(&engine, &intent).await,
-        Commands::Pack { output } => cmd_pack(&engine, output).await,
-        Commands::Unpack { nail } => cmd_unpack(&engine, &nail).await,
-        Commands::Bench => cmd_bench(&engine).await,
-        Commands::ShellInfo => cmd_shell_info(&engine).await,
-        Commands::Reflexes { verbose } => cmd_reflexes(&engine, verbose).await,
-        Commands::Rpc { port } => cmd_rpc(&engine, port).await,
+        Commands::Status => {
+            let mut engine = create_engine(&db_path)?;
+            cmd_status(&mut engine)
+        }
+        Commands::Teach { intent, action } => {
+            let mut engine = create_engine(&db_path)?;
+            cmd_teach(&mut engine, intent, action)
+        }
+        Commands::Do { intent } => {
+            let mut engine = create_engine(&db_path)?;
+            cmd_do(&mut engine, &intent)
+        }
+        Commands::Pack { output } => {
+            let engine = create_engine(&db_path)?;
+            cmd_pack(&engine, output)
+        }
+        Commands::Unpack { nail } => {
+            cmd_unpack(&nail, &db_path)
+        }
+        Commands::Bench => {
+            let mut engine = create_engine(&db_path)?;
+            cmd_bench(&mut engine)
+        }
+        Commands::ShellInfo => {
+            let engine = create_engine(&db_path)?;
+            cmd_shell_info(&engine)
+        }
+        Commands::Reflexes { verbose } => {
+            let engine = create_engine(&db_path)?;
+            cmd_reflexes(&engine, verbose)
+        }
     };
 
     let elapsed = overall_start.elapsed();
 
-    // Don't print timing for RPC (long-running) or Bench (has its own timing)
-    if !is_long_running {
+    if result.is_ok() {
         println!(
             "\n  {} {}",
-            "⏱".dimmed(),
+            "Time:".dimmed(),
             format!("Completed in {:.2}ms", elapsed.as_secs_f64() * 1000.0).dimmed()
         );
     }

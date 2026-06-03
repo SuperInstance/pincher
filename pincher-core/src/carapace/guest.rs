@@ -148,17 +148,22 @@ impl GuestModule {
             "loaded WASM binary from disk"
         );
 
-        // Validate the WASM binary using wasmtime.
-        let engine = wasmtime::Engine::default();
-        if let Err(e) = wasmtime::Module::validate(&engine, &bytecode) {
-            tracing::error!(name = %name, error = %e, "WASM validation failed");
-            return Err(GuestError::ValidationFailed {
-                name,
-                reason: e.to_string(),
-            });
+        // Validate the WASM binary using wasmtime (if available).
+        #[cfg(feature = "wasmtime")]
+        {
+            let engine = wasmtime::Engine::default();
+            if let Err(e) = wasmtime::Module::validate(&engine, &bytecode) {
+                tracing::error!(name = %name, error = %e, "WASM validation failed");
+                return Err(GuestError::ValidationFailed {
+                    name,
+                    reason: e.to_string(),
+                });
+            }
+            tracing::debug!(name = %name, "WASM binary validated successfully");
         }
 
-        tracing::debug!(name = %name, "WASM binary validated successfully");
+        #[cfg(not(feature = "wasmtime"))]
+        tracing::warn!(name = %name, "WASM validation skipped — wasmtime feature not enabled");
 
         Ok(Self {
             name,
@@ -183,14 +188,20 @@ impl GuestModule {
         let hash = blake3::hash(&bytecode).to_hex().to_string();
 
         // Validate the WASM binary.
-        let engine = wasmtime::Engine::default();
-        if let Err(e) = wasmtime::Module::validate(&engine, &bytecode) {
-            tracing::error!(name = %name, error = %e, "WASM validation failed");
-            return Err(GuestError::ValidationFailed {
-                name,
-                reason: e.to_string(),
-            });
+        #[cfg(feature = "wasmtime")]
+        {
+            let engine = wasmtime::Engine::default();
+            if let Err(e) = wasmtime::Module::validate(&engine, &bytecode) {
+                tracing::error!(name = %name, error = %e, "WASM validation failed");
+                return Err(GuestError::ValidationFailed {
+                    name,
+                    reason: e.to_string(),
+                });
+            }
         }
+
+        #[cfg(not(feature = "wasmtime"))]
+        tracing::warn!(name = %name, "WASM validation skipped — wasmtime feature not enabled");
 
         Ok(Self {
             name,
@@ -352,7 +363,9 @@ impl GuestConfig {
     /// Convert this config into a wasmtime `Config`.
     ///
     /// This applies the memory limits, epoch interruption, and other settings
-    /// to a wasmtime configuration object.
+    /// to a wasmtime configuration object. Only available when the `wasmtime`
+    /// feature is enabled.
+    #[cfg(feature = "wasmtime")]
     pub fn to_wasmtime_config(&self) -> wasmtime::Config {
         let mut config = wasmtime::Config::new();
 

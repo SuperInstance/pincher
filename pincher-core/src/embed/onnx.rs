@@ -428,7 +428,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 /// vector for the same input text. This ensures teach-then-match works
 /// even without an ONNX model loaded.
 fn deterministic_embedding(text: &str) -> Vec<f32> {
-    use std::hash::{Hash, Hasher};
+    use sha2::Digest;
 
     let mut vec = vec![0.0f32; EMBEDDING_DIM];
 
@@ -436,9 +436,7 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
     let chars: Vec<char> = text.chars().collect();
     for i in 0..chars.len().saturating_sub(2) {
         let trigram: String = chars[i..i+3].iter().collect();
-        let mut hasher = sha2::Sha256::new();
-        trigram.hash(&mut hasher);
-        let hash = hasher.finalize();
+        let hash = sha2::Sha256::digest(trigram.as_bytes());
         for j in 0..8 {
             let idx = (hash[j] as usize) % EMBEDDING_DIM;
             let sign = if hash[(j + 8) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };
@@ -449,9 +447,7 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
     // Whole-word hashing for semantic content
     for word in text.split_whitespace() {
         let word_lower = word.to_lowercase();
-        let mut hasher = sha2::Sha256::new();
-        word_lower.hash(&mut hasher);
-        let hash = hasher.finalize();
+        let hash = sha2::Sha256::digest(word_lower.as_bytes());
         for j in 0..6 {
             let idx = (hash[j] as usize + j * 64) % EMBEDDING_DIM;
             let sign = if hash[(j + 8) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };
@@ -460,9 +456,7 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
     }
 
     // Global text hash for overall similarity
-    let mut hasher = sha2::Sha256::new();
-    text.hash(&mut hasher);
-    let global_hash = hasher.finalize();
+    let global_hash = sha2::Sha256::digest(text.as_bytes());
     for j in 0..12 {
         let idx = (global_hash[j] as usize) % EMBEDDING_DIM;
         let sign = if global_hash[(j + 12) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };

@@ -7,6 +7,7 @@ edition.workspace = true
 default = []
 onnx = ["dep:ort", "dep:ndarray"]
 landlock = ["dep:landlock"]
+wasmtime = ["dep:wasmtime"]
 
 [dependencies]
 serde = { workspace = true }
@@ -48,3 +49,9 @@ ndarray = { version = "0.16", optional = true }
 
 # Landlock sandboxing (optional, Linux-only)
 landlock = { version = "0.4", optional = true }
+
+# WASM runtime (optional, for carapace guest module support)
+wasmtime = { version = "27", optional = true }
+
+# Regex for immunology pattern matching
+regex = "1"

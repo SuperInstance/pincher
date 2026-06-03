@@ -568,6 +568,10 @@ mod tests {
     #[test]
     fn test_pack_unpack_roundtrip() {
         let temp_dir = std::env::temp_dir().join("pincher_pack_test");
+        // Clean up from previous runs
+        if temp_dir.exists() {
+            std::fs::remove_dir_all(&temp_dir).ok();
+        }
         std::fs::create_dir_all(&temp_dir).ok();
 
         // Create a simple SQLite database

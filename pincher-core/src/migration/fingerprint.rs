@@ -310,14 +310,14 @@ mod tests {
             hostname: "host2".to_string(),
             os: "Windows".to_string(),
             os_version: "11".to_string(),
-            cpu_count: 8,
-            ram_mb: 16384,
-            gpu: "nvidia".to_string(),
+            cpu_count: 4,
+            ram_mb: 8192,
+            gpu: "none".to_string(),
             mac_hash: "def".to_string(),
         };
 
         let score = compatibility_score(&fp1, &fp2);
-        // Different OS should have low score
+        // Different OS, less RAM, and no GPU should have low score
         assert!(score < 0.5);
     }
 

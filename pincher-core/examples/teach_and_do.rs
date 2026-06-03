@@ -2,40 +2,29 @@
 //!
 //! Run with: cargo run --example teach_and_do
 
-use pincher_core::PincherOS;
+use pincher_core::ReflexEngine;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     // Create an in-memory PincherOS instance for the demo.
-    let mut os = PincherOS::in_memory()?;
-
-    // Seed built-in reflexes.
-    os.seed_builtins()?;
+    let mut engine = ReflexEngine::open(std::path::Path::new(":memory:"), None)?;
 
     // Teach a custom reflex.
-    let id = os
-        .teach("make a folder", "mkdir -p {path}", None)
-        .await?;
-    println!("[TAUGHT] reflex {} — trigger: \"make a folder\", command: \"mkdir -p {{path}}\"", id);
+    let reflex = engine.teach("show system info", "system.info")?;
+    println!("[TAUGHT] reflex {} — intent: \"{}\", action: \"{}\"",
+        reflex.id, reflex.intent, reflex.action);
 
     // Do a command that should match.
-    let result = os.do_command("make a folder called test").await?;
-    println!("[DO] path: {:?}, embedding_ms: {}ms", result.path, result.embedding_ms);
-    if let Some(ref matched) = result.matched {
-        println!("  matched: \"{}\" (confidence {:.2}, similarity {:.2})",
-            matched.trigger_text, matched.confidence, matched.similarity);
+    let execution = engine.do_command("show system info")?;
+    println!("[DO] confidence: {:.2}, match_type: {:?}", execution.confidence, execution.match_type);
+    if let Some(reflex_id) = execution.reflex_id {
+        println!("  matched reflex: {}", reflex_id);
     }
-    if let Some(ref exec) = result.execution {
-        println!("  exit_code: {}, duration: {}ms", exec.exit_code, exec.duration_ms);
-        if !exec.stdout.is_empty() {
-            println!("  stdout: {}", exec.stdout.trim());
-        }
-    }
+    println!("  output: {}...", &execution.output[..execution.output.len().min(80)]);
 
     // Check status.
-    let status = os.status();
-    println!("[STATUS] hostname={}, tier={:?}, reflexes={}, mode={:?}",
-        status.hostname, status.device_tier, status.reflex_count, status.runtime_mode);
+    let status = engine.get_status()?;
+    println!("[STATUS] reflexes={}, embedder_loaded={}",
+        status.reflex_count, status.embedder_loaded);
 
     Ok(())
 }

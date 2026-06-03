@@ -379,12 +379,24 @@ fn default_veto_rules() -> Vec<VetoRule> {
             path: "/dev".to_string(),
         },
 
-        // Require capabilities for dangerous operations
-        VetoRule::RequireCapability {
-            capability: "network".to_string(),
+        // Require capabilities for specific dangerous operations
+        // These trigger confirmation for network and subprocess commands
+        // rather than blanket-blocking everything
+        VetoRule::ForbiddenPattern {
+            pattern: "curl ".to_string(),
+            reason: "Network request requires 'network' capability".to_string(),
         },
-        VetoRule::RequireCapability {
-            capability: "subprocess".to_string(),
+        VetoRule::ForbiddenPattern {
+            pattern: "wget ".to_string(),
+            reason: "Network download requires 'network' capability".to_string(),
+        },
+        VetoRule::ForbiddenPattern {
+            pattern: "ssh ".to_string(),
+            reason: "SSH connection requires 'network' capability".to_string(),
+        },
+        VetoRule::ForbiddenPattern {
+            pattern: "nc ".to_string(),
+            reason: "Netcat requires 'network' capability".to_string(),
         },
 
         // File size limit: 100MB
@@ -434,22 +446,28 @@ mod tests {
     }
 
     #[test]
-    fn test_veto_require_capability_network() {
+    fn test_veto_forbidden_network_command() {
         let engine = VetoEngine::with_defaults();
         let context = ExecutionContext::for_command("curl http://example.com");
         let decision = engine.check("curl http://example.com", &context).unwrap();
-        assert!(decision.requires_confirmation());
+        // curl is blocked by ForbiddenPattern rule
+        assert!(decision.is_denied());
     }
 
     #[test]
-    fn test_veto_capability_granted() {
+    fn test_veto_capability_check() {
         let engine = VetoEngine::with_defaults();
-        let context = ExecutionContext::for_command("curl http://example.com")
-            .with_capability("network");
+        // A custom engine with a RequireCapability rule
+        let mut engine = VetoEngine::new();
+        engine.add_rule(VetoRule::RequireCapability { capability: "network".to_string() });
+        let context = ExecutionContext::for_command("curl http://example.com");
         let decision = engine.check("curl http://example.com", &context).unwrap();
-        // Should not be denied for network since capability is granted
-        // (subprocess may still be needed)
-        assert!(!decision.is_denied() || decision.requires_confirmation());
+        assert!(decision.requires_confirmation());
+        // With capability granted, should allow
+        let context_with_cap = ExecutionContext::for_command("curl http://example.com")
+            .with_capability("network");
+        let decision2 = engine.check("curl http://example.com", &context_with_cap).unwrap();
+        assert!(decision2.is_allowed());
     }
 
     #[test]

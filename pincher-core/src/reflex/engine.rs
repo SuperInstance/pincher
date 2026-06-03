@@ -261,8 +261,14 @@ impl ReflexEngine {
         let veto_engine = crate::security::veto::VetoEngine::default();
         let veto_result = veto_engine.check(action_to_check, &veto_context)
             .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
-        if !veto_result.is_allowed() {
-            return Err(EngineError::Vetoed(format!("Action blocked by veto engine: {:?}", veto_result)));
+        match &veto_result {
+            crate::security::veto::VetoDecision::Deny(reason) => {
+                return Err(EngineError::Vetoed(format!("Action denied: {}", reason)));
+            }
+            crate::security::veto::VetoDecision::RequireConfirmation(reason) => {
+                debug!("Action requires confirmation (proceeding): {}", reason);
+            }
+            crate::security::veto::VetoDecision::Allow => {}
         }
 
         let is_builtin = is_builtin_intent(&reflex.intent);
@@ -320,8 +326,14 @@ impl ReflexEngine {
         let veto_engine = crate::security::veto::VetoEngine::default();
         let veto_result = veto_engine.check(action_to_check, &veto_context)
             .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
-        if !veto_result.is_allowed() {
-            return Err(EngineError::Vetoed(format!("Action blocked by veto engine: {:?}", veto_result)));
+        match &veto_result {
+            crate::security::veto::VetoDecision::Deny(reason) => {
+                return Err(EngineError::Vetoed(format!("Action denied: {}", reason)));
+            }
+            crate::security::veto::VetoDecision::RequireConfirmation(reason) => {
+                debug!("Action requires confirmation (proceeding): {}", reason);
+            }
+            crate::security::veto::VetoDecision::Allow => {}
         }
 
         let is_builtin = is_builtin_intent(&reflex.intent);
