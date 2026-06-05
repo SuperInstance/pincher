@@ -1,0 +1,65 @@
+{
+    "name": "Pincher Development",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {
+            "version": "latest"
+        },
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.12"
+        }
+    },
+    "mounts": [
+        {
+            "source": "/tmp/i2i-vessel",
+            "target": "/tmp/i2i-vessel",
+            "type": "bind"
+        }
+    ],
+    "remoteEnv": {
+        "AGENT_NAME": "pincher-agent",
+        "AGENT_ROLE": "fleet-runtime-node",
+        "DEEPINFRA_API_URL": "https://api.deepinfra.com/v1",
+        "HEALER_MODEL": "deepseek-ai/DeepSeek-V4-Flash",
+        "PINCHER_RAM_LIMIT_MB": "1024",
+        "PINCHER_CPU_LIMIT_PERCENT": "80",
+        "PINCHER_LOG_LEVEL": "info",
+        "I2I_VESSEL": "/tmp/i2i-vessel",
+        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+        "DEEPINFRA_API_KEY": "${localEnv:DEEPINFRA_API_KEY}",
+        "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+        "OPENAI_API_URL": "${localEnv:OPENAI_API_URL}",
+        "FLEET_HOMESERVER": "${localEnv:FLEET_HOMESERVER}",
+        "FLEET_MATRIX_USER": "${localEnv:FLEET_MATRIX_USER}",
+        "FLEET_MATRIX_PASSWORD": "${localEnv:FLEET_MATRIX_PASSWORD}"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "serayuzgur.crates",
+                "tamasfe.even-better-toml",
+                "github.vscode-pull-request-github",
+                "vadimcn.vscode-lldb",
+                "streetsidesoftware.code-spell-checker"
+            ],
+            "settings": {
+                "editor.formatOnSave": true,
+                "editor.formatOnPaste": true,
+                "rust-analyzer.check.command": "clippy",
+                "rust-analyzer.cargo.features": "all",
+                "[rust]": {
+                    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+                },
+                "[toml]": {
+                    "editor.defaultFormatter": "tamasfe.even-better-toml"
+                }
+            }
+        }
+    },
+    "postCreateCommand": "cargo build && cargo check",
+    "remoteUser": "vscode",
+    "containerUser": "vscode"
+}
