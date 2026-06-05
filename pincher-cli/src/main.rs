@@ -1,7 +1,7 @@
 #!/usr/bin/env rust
 //! Pincher CLI — Official Command Line Interface matching the pincherOS developer guide
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -134,7 +134,7 @@ fn main() -> Result<()> {
         }
         Commands::Mature {
             manifest,
-            database,
+            database: _,
         } => {
             println!("[*] Starting adversarial fuzzing loop for intent target: {:?}", manifest);
             println!("[+] Expanded seed matrix into 28 semantic test coordinates.");
