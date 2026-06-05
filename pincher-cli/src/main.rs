@@ -225,8 +225,7 @@ fn cmd_status(db_path: &Path) -> Result<()> {
 fn cmd_teach(db_path: &Path) -> Result<()> {
     use std::io::{self, Write};
 
-    let mut engine = ReflexEngine::open(db_path, None)
-        .context("Failed to open reflex engine")?;
+    let mut engine = ReflexEngine::open(db_path, None).context("Failed to open reflex engine")?;
 
     println!("🤖 Interactive Teach Mode");
     println!("  Enter an intent (what you want to do) and an action (how to do it).");
@@ -281,8 +280,7 @@ fn cmd_teach(db_path: &Path) -> Result<()> {
 
 /// `pincher do <input>` — Execute a natural language intent.
 fn cmd_do(db_path: &Path, input: &str) -> Result<()> {
-    let mut engine = ReflexEngine::open(db_path, None)
-        .context("Failed to open reflex engine")?;
+    let mut engine = ReflexEngine::open(db_path, None).context("Failed to open reflex engine")?;
 
     println!("🔍 Executing intent: {}", input);
 
@@ -361,8 +359,7 @@ fn cmd_unpack(bundle: &Path) -> Result<()> {
             }
             let manifest_file = output_dir.join("manifest.json");
             if manifest_file.exists() {
-                let manifest_content =
-                    std::fs::read_to_string(&manifest_file).unwrap_or_default();
+                let manifest_content = std::fs::read_to_string(&manifest_file).unwrap_or_default();
                 if let Ok(manifest) =
                     serde_json::from_str::<migration::NailManifest>(&manifest_content)
                 {
@@ -412,8 +409,8 @@ fn cmd_run(bundle: &Path, input: &str) -> Result<()> {
     }
 
     println!("[*] Decoding runtime state...");
-    let mut engine = ReflexEngine::open(&db_file, None)
-        .context("Failed to open bundle database")?;
+    let mut engine =
+        ReflexEngine::open(&db_file, None).context("Failed to open bundle database")?;
 
     println!("[*] Transforming user intent to coordinates...");
     println!("[📝] Input: {}", input);
@@ -490,7 +487,9 @@ fn cmd_doctor(db_path: &Path) -> Result<()> {
         Ok(conn) => {
             println!("✅ ({})", resolved.display());
             // Check reflex count
-            match conn.query_row("SELECT COUNT(*) FROM reflexes", [], |row| row.get::<_, i64>(0)) {
+            match conn.query_row("SELECT COUNT(*) FROM reflexes", [], |row| {
+                row.get::<_, i64>(0)
+            }) {
                 Ok(rc) => println!("  ├── Reflexes:           {}", rc),
                 Err(e) => {
                     println!("  ├── Reflexes:           ❌ ({})", e);
@@ -664,9 +663,10 @@ fn get_disk_space(path: &Path) -> Result<(f64, f64), std::io::Error> {
         .output()?;
 
     if !output.status.success() {
-        return Err(std::io::Error::other(
-            format!("df exited with status: {:?}", output.status.code()),
-        ));
+        return Err(std::io::Error::other(format!(
+            "df exited with status: {:?}",
+            output.status.code()
+        )));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -678,9 +678,7 @@ fn get_disk_space(path: &Path) -> Result<(f64, f64), std::io::Error> {
         let free = parts[3].parse::<f64>().unwrap_or(0.0);
         Ok((free / 1e9, total / 1e9))
     } else {
-        Err(std::io::Error::other(
-            "Unexpected df output format",
-        ))
+        Err(std::io::Error::other("Unexpected df output format"))
     }
 }
 
@@ -724,13 +722,9 @@ fn cmd_compile(workspace: &Path) -> Result<()> {
     println!("[*] Invoking toolchain compiler for target: wasm32-wasip1");
     println!("[SUCCESS] WASM binary compilation finished.");
 
-    println!(
-        "ℹ️  Full WASM compilation requires the `wasm32-wasip1` target installed:"
-    );
+    println!("ℹ️  Full WASM compilation requires the `wasm32-wasip1` target installed:");
     println!("   rustup target add wasm32-wasip1");
-    println!(
-        "   Then use `pincher compile` with a registered pincher.toml Intent Contract."
-    );
+    println!("   Then use `pincher compile` with a registered pincher.toml Intent Contract.");
 
     Ok(())
 }
@@ -813,7 +807,10 @@ fn cmd_bench() -> Result<()> {
     println!("  Embedding benchmark:");
     println!("    Samples:       {}", samples.len());
     println!("    Total time:    {:.2}ms", total.as_secs_f64() * 1000.0);
-    println!("    Average:       {:.2}µs", avg.as_secs_f64() * 1_000_000.0);
+    println!(
+        "    Average:       {:.2}µs",
+        avg.as_secs_f64() * 1_000_000.0
+    );
 
     println!(
         "  ℹ️  Full benchmark with teach+match+exec requires a reflex database.\n\
@@ -835,7 +832,10 @@ fn cmd_shell_info() -> Result<()> {
             println!("  CPU cores:   {}", fp.cpu_count);
             println!("  RAM:         {} MB", fp.ram_mb);
             println!("  GPU:         {}", fp.gpu);
-            println!("  MAC hash:    {}", &fp.mac_hash[..fp.mac_hash.len().min(16)]);
+            println!(
+                "  MAC hash:    {}",
+                &fp.mac_hash[..fp.mac_hash.len().min(16)]
+            );
             println!("  Fingerprint: {}", hash);
         }
         Err(e) => {
@@ -874,8 +874,10 @@ fn cmd_publish(bundle: &Path, registry_url: &str, token: &str) -> Result<()> {
     let output = std::process::Command::new("curl")
         .args([
             "-s",
-            "-o", "/dev/null",
-            "-w", "%{http_code}",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
             "-F",
             &format!("bundle=@{}", bundle.display()),
             "-H",
@@ -917,10 +919,7 @@ fn cmd_update(registry_url: &str) -> Result<()> {
     }
 
     let entries = std::fs::read_dir(&bundle_dir).unwrap_or_else(|_| {
-        eprintln!(
-            "  Cannot read bundle directory: {}",
-            bundle_dir.display()
-        );
+        eprintln!("  Cannot read bundle directory: {}", bundle_dir.display());
         std::process::exit(1);
     });
 
@@ -932,10 +931,7 @@ fn cmd_update(registry_url: &str) -> Result<()> {
             found_any = true;
             // Use curl to check registry for updates
             let output = std::process::Command::new("curl")
-                .args([
-                    "-s",
-                    &format!("{}/api/v1/packages/{}", registry_url, name),
-                ])
+                .args(["-s", &format!("{}/api/v1/packages/{}", registry_url, name)])
                 .output()
                 .ok();
             match output.and_then(|o| {
@@ -946,9 +942,7 @@ fn cmd_update(registry_url: &str) -> Result<()> {
                 }
             }) {
                 Some(val) => {
-                    let latest = val["latest_version"]
-                        .as_str()
-                        .unwrap_or("unknown");
+                    let latest = val["latest_version"].as_str().unwrap_or("unknown");
                     println!("  📦 {}: update available (latest: {})", name, latest);
                 }
                 None => {
@@ -1010,10 +1004,7 @@ fn cmd_gastrolith(command: &GastrolithCommands) -> Result<()> {
                 }
             }
         }
-        GastrolithCommands::Migrate {
-            gastrolith,
-            bundle,
-        } => {
+        GastrolithCommands::Migrate { gastrolith, bundle } => {
             println!("🦀 Migrating agent using gastrolith:");
             println!("  Checkpoint: {}", gastrolith.display());
             println!("  Bundle:     {}", bundle.display());
