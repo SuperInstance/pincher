@@ -4,6 +4,7 @@
 //! integration (capability-based isolation) for safe reflex execution.
 
 pub mod sandbox;
+pub mod ternary;
 pub mod veto;
 
 // Re-export key types from veto
