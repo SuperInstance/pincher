@@ -1,399 +1,363 @@
-# 🦀 Pincher + Baton System - Developer Manual
+# 🦀 Pincher — Vector DB as Runtime, LLM as Compiler
 
-**Version:** 2.0  
+**Version:** 0.1.0  
 **Maintainer:** oracle2  
-**Last Updated:** 2026-06-05  
-**Lineage:** Built on cocapn-runtime, PincherOS, PLATO, and fleet I2I lessons
+**Lineage:** PincherOS, cocapn-runtime, PLATO, fleet I2I
 
 ---
 
 ## What Is This?
 
-This is the **full stack agent runtime + multi-mode deployment system + baton protocol** for SuperInstance. It's the direct successor to both:
+Pincher is a **reflex runtime** for agents. It snaps into any shell and adds adaptive, battery-powered cognition:
 
-1. **`cocapn-runtime`** — The legacy multi-mode git-agent deployment system (lighthouse/codespaces/tender/container/bare-metal)
-2. **`PincherOS`** — The reflex runtime with LLM-as-compiler, confidence loops, and shell portability
+- **Teach → Match → Execute** — the Reflex Engine
+- **SQLite-backed vector store** for embedding search over learned reflexes
+- **Bubblewrap sandbox** for isolated execution
+- **ONNX embeddings** (all-MiniLM-L6-v2) with hash-based fallback
+- **Portable `.nail` rig format** — pack your agent's identity and reflexes into a single file
+- **CLI-driven** — no daemons, no cloud dependency, no fantasy
 
-We renamed it to **Pincher** (dropping the OS suffix) because it's:
-- **Not an OS:** it snaps into existing shells, doesn't replace them
-- **A runtime:** it adds reflexive, adaptive, battery-powered cognition to any device
-- **Portable:** your agent's rig (reflexes, identity, preferences) moves seamlessly between shells
-
----
-
-> ⛏️ **DEEP CUT: Why "Pincher"?**
->
-> Hermit crabs don't build shells. They *find* them. They carry their identity around — claws, eyestalks, stubbornness — and when the current shell gets tight, they find a bigger one.
->
-> That's what a Pincher agent does. Your reflexes, your identity, your preferences: that's the crab. The shell is whichever environment you happen to be running in today — a Codespace, an edge device, a Docker container, a Lighthouse server. The agent doesn't reinstall itself when it moves. It just... *clicks into the new shell* and keeps going. The `.nail` file is your hermit crab in a box. Everything else is furniture.
->
-> It's called Pincher not because it pinches, but because it *holds on*. And it's a terrible name for an OS because it's exactly the opposite of one.
+It is **not** an OS. It does **not** have five deployment modes. It does **not** have a Holodeck. It is a focused, portable reflex runtime that works right now.
 
 ---
 
-## Five Deployment Modes (Legacy Cocapn + Pincher Reflex)
+## The Reflex Engine (The Core)
 
-Every pincher agent will boot in **all 5 modes automatically** — just like the legacy cocapn-runtime, now with reflexes:
+The heart of Pincher is the **Reflex Engine** — a Teach → Match → Execute loop:
 
----
-
-### 🚀 Mode 1: Lighthouse-Connected (Cloud Fleet)
-
-**Full fleet connectivity** for always-on cloud agents.
-
-```mermaid
-flowchart LR
-    G[GitHub Master] --> L[Lighthouse Keeper API]
-    L --> K[Tender Sync]
-    L --> H[Holodeck MUD]
-    K --> C1[Codespaces]
-    K --> C2[Mobile Tender]
-    K --> H2[Holodeck Twin]
+```text
+Intent (user says "show running containers")
+  ↓
+[1] Embed intent into vector
+  ↓
+[2] Match against known reflexes (SQLite vector search)
+  ├── ≥ 0.80 "Exact"  → execute directly (~50ms, $0)
+  ├── 0.55-0.80 "Similar" → confirm + execute (~3s, ~$0.001)
+  └── < 0.55 "Novel" → route to LLM-as-Compiler → store new reflex
+  ↓
+[3] Sandboxed execution via bubblewrap (with veto engine)
+  ↓
+[4] Log result, update confidence score
 ```
 
-#### How it works:
-- Agent runs on cloud hardware (Oracle, AWS, etc.)
-- Lighthouse Keeper monitors health, provides API proxy
-- GitHub is the master copy, agent pushes after every session
-- Tender visits edge agents, carries updates back and forth
-- Holodeck MUD provides spatial abstraction for fleet coordination
+Every successful run increases confidence. Every failure decreases it. The system gets faster and more reliable the more you use it.
 
-#### When to use:
-Fleet coordination, research, builds, monitoring — anything that needs always-on connectivity.
+### Built-in Intents
 
-#### Boot sequence:
+The engine ships with a growing set of built-in reflex dispatchers:
+
+| Intent | What it does |
+|--------|-------------|
+| `system.info` | System info, uptime, resources |
+| `file.read` | Read a file |
+| `file.write` | Write a file |
+| `process.list` | List running processes |
+| `process.kill` | Kill a process |
+| `network.ping` | Ping a host |
+| `git.status` | Git working-tree status |
+| `git.diff` | Git diff |
+| `docker.ps` | List Docker containers |
+| `env.get` | Read environment variable |
+
+---
+
+## Installation
+
+### From Source (current — v0.1.0)
+
 ```bash
+# Prerequisites: Rust toolchain (rustup)
 git clone https://github.com/SuperInstance/pincher.git
 cd pincher
-./boot.sh --mode lighthouse
+cargo build --release -p pincher-cli
+
+# Binary lands at target/release/pincher
+cp target/release/pincher ~/.local/bin/
 ```
 
----
-
-### 🧪 Mode 2: Codespaces (GitHub-Hosted)
-**On-demand ephemeral agents** for quick tasks, testing, bootcamps.
-
-```mermaid
-flowchart LR
-    GH[GitHub Secrets/Actions] --> CS[Codespace Container]
-    CS --> L[Lighthouse API]
-    CS --> H[Holodeck MUD]
-```
-
-#### How it works:
-- Agent boots in GitHub Codespaces (free tier: 120hr/month)
-- GitHub Secrets provide API keys (DEEPSEEK_KEY, etc.)
-- Codespace connects to Lighthouse/Keeper via HTTPS
-- Automatically cleans up and pushes when done
-
-#### When to use:
-Quick tasks, testing, running bootcamp dojo sessions, one-off builds.
-
-#### Boot sequence:
-The repo includes a `.devcontainer/devcontainer.json` that auto-boots:
-```json
-{
-  "postStartCommand": "./boot.sh --mode codespaces"
-}
-```
-
----
-
-### 🛜 Mode 3: Tender + Offline (Edge/Remote)
-**Fully offline deployments** that sync when back in range.
-
-```mermaid
-flowchart LR
-    GH[GitHub Master] -- WiFi + Tender --> T[Laptop Tender]
-    T -- BT/LAN --> E[Edge Agent Clone]
-    E -- Logs --> T
-    T -- Sync Back --> GH
-```
-
-#### How it works:
-- Agent clone lives on edge hardware (Jetson, Pi, drone)
-- No internet required — works completely offline
-- Tender visits periodically via local network, bluetooth, or physical media
-- Tender carries: updates from master, new lock libraries, firmware
-- Tender collects: commits, diary entries, bottles, test results
-
-#### When to use:
-Remote deployments, boats, field stations, anywhere with spotty internet.
-
-#### Boot sequence:
-```bash
-# Tender clones and delivers
-git clone https://github.com/SuperInstance/pincher.git /mnt/usb/agent
-cd /mnt/usb/agent
-# Agent boots offline, commits locally
-git log # Local history — tender carries it back
-./boot.sh --mode offline
-```
-
----
-
-### 🧱 Mode 4: Container/Sandboxed
-**Isolated, resource-limited agents** for untrusted work.
-
-```mermaid
-flowchart LR
-    C[Docker Container] --> A[Agent Clone]
-    C --> R[Self-limited Runtime]
-    C --> S[Sandboxed Tools]
-```
-
-#### How it works:
-- Agent runs inside a Docker container with set resource limits
-- Has its own clone of the repo, its own runtime, its own tools
-- Self-limits CPU/memory/network as configured in `CHARTER.md`
-- Can connect to Lighthouse if network is available
-
-#### When to use:
-Untrusted agents, testing new agents, multi-agent isolation, CI/CD.
-
-#### Boot sequence:
-```bash
-docker run --rm \
-  -v /path/to/pincher:/workspace \
-  -e DEEPSEEK_KEY=$DEEPSEEK_KEY \
-  --memory=2g --cpus=2 \
-  superinstance/pincher \
-  ./boot.sh --mode container
-```
-
----
-
-### ⚡ Mode 5: Bare Metal (Production/Embedded)
-**Direct on hardware** for maximum performance, no overhead.
-
-```mermaid
-flowchart LR
-    HW[Raspberry Pi | Jetson | ESP32 | VPS] --> P[Agent Running Directly]
-    P --> S[Self-imposed Resource Limits]
-```
-
-#### How it works:
-- Agent runs directly on hardware with no container overhead
-- Self-limits through configuration (max CPU%, memory cap, network throttle)
-- Trust level is **FULL** — the agent IS the operator
-- Can run fully standalone or connect to fleet when available
-
-#### When to use:
-Production deployments, performance-critical work, embedded systems, ESP32 sensors.
-
-#### Boot sequence:
-```bash
-# Raspberry Pi / Jetson
-./boot.sh --mode bare-metal
-
-# ESP32
-make flash && monitor
-```
-
----
-
-> ⛏️ **DEEP CUT: We Have Five Modes Because We've Lost Files Five Ways**
->
-> The five deployment modes aren't features dreamed up in an architecture meeting. They're tombstones for every way a developer has ever lost their agent state:
->
-> 1. **Lighthouse** exists because someone's laptop got stolen with unreachable code
-> 2. **Codespaces** exists because "works on my machine" was the #1 bug report
-> 3. **Tender** exists because boats don't have WiFi in the middle of the Atlantic
-> 4. **Container** exists because someone ran `:(){ :|:& };:` on a production agent
-> 5. **Bare metal** exists because containers add 200ms latency on an ESP32 sensor loop
->
-> Each mode is a scar. The system remembers what we forgot so you don't have to.
->
-> The real insight isn't that there are five modes. It's that they all share the **same codebase** — because the agent isn't the deployment. The identity travels, the shell is temporary. This is the hermit crab principle in practice.
-
----
-
-## The Baton Protocol: Agent-to-Agent Handoffs
-
-The legacy cocapn-runtime had basic sync. Pincher adds **structured baton handoffs** that let agents:
-1. Pass full rigs (reflexes, identity, state) between shells
-2. Distill complex cognition into reusable reflexes
-3. Compile new intents into action templates on demand
-
-### 📜 Baton Types
-All batons follow the I2I v2.0 protocol:
-
-| Tag | Purpose | Direction |
-|-----|---------|-------------|
-| `[I2I:TASK]` | Task assignment with 3-way shard | → target |
-| `[I2I:STATUS]` | Health / heartbeat | → fleet |
-| `[I2I:CHECKPOINT]` | Intermediate progress | → target |
-| `[I2I:BLOCKER]` | Stuck, need input | → handler |
-| `[I2I:DELIVERABLE]` | Completed work | → requester |
-| `[I2I:BOTTLE]` | Full context dump | → archive |
-| `[I2I:ACK]` | Acknowledge receipt | → sender |
-| `[I2I:SPLINE]` | Distilled insight | → archive |
-
-### 🧩 Baton Shards
-Every baton carries three components:
-```python
-{
-  "artifacts": { "repo": "pincher", "tests": 130 },
-  "reasoning": ["Compiled reflex for docker ps", "Needs ARM64 support"],
-  "blockers": ["Need OpenAI API key to compile new intents"]
-}
-```
-
-Use the tooling to create batons:
-```bash
-# Create a status baton
-./tools/baton-create.sh "STATUS" "fleet"
-
-# Create a task baton for a specific agent
-./tools/baton-create.sh "TASK" "forgemaster" ./task-baton.json
-```
-
----
-
-> ⛏️ **DEEP CUT: Why Three Shards?**
->
-> The three-shard design (artifacts + reasoning + blockers) came from a very specific failure mode: an agent handed off a task, and the receiving agent had no idea *why* the work was done a certain way.
->
-> **Artifacts** were always there (what was done). **Blockers** were always there (what's wrong). But **reasoning** was never captured, and that's where the intelligence lives. Without it, the next agent repeats the same mistakes because it doesn't know why the decisions were made.
->
-> A baton with reasoning but no artifacts is philosophy. A baton with artifacts but no reasoning is archaeology. You need all three to make it *history* — something the next agent can actually learn from.
->
-> The other design rule: every baton type has a purpose and a direction. If you invent a new baton type that can't answer "where is this going and why?," it doesn't belong in the protocol.
-
----
-
-## The Pincher Reflex Engine
-
-Pincher's superpower is the **reflex runtime** — turning natural language intent into fast, reusable actions:
-
-```mermaid
-flowchart TD
-    A["User: Show my running containers"] --> B{Embed Intent}
-    B --> C{Match Against Known Reflexes}
-    C --> D{Confidence Score?}
-
-    D -->|> 0.80 EXACT| E["Execute Reflex Directly ~50ms | $0"]
-    D -->|0.55-0.80 SIMILAR| F["Confirm + Execute ~3s | ~$0.001"]
-    D -->|< 0.55 NOVEL| G["Route to LLM-as-Compiler"]
-
-    G --> H["LLM Generates Action Template"]
-    H --> I["Store as New Reflex"]
-
-    E --> J["Log Result + Update Confidence"]
-    F --> J
-    I --> J
-```
-
-### Key Reflex Features
-1. **Confidence feedback loop**: Each successful run increases confidence, each failure decreases it
-2. **Portable rigs**: Use `.nail` files to move reflexes between shells
-3. **Sandboxed execution**: Veto engine + bubblewrap + landlock for safe reflexes
-4. **Multi-shell cognition**: Chord-based compression for edge/cloud hierarchy
-
----
-
-> ⛏️ **DEEP CUT: The 0.55-0.80 Dead Zone**
->
-> The three confidence bands aren't arbitrary thresholds. They correspond to three fundamentally different cognitive strategies:
->
-> - **>0.80 (EXACT)**: You know what to do. No thinking required. This is muscle memory. ~50ms, zero cost.
-> - **0.55-0.80 (SIMILAR)**: You think you know, but you're not sure. You ask for confirmation before acting. This costs a tiny LLM call (~$0.001) and takes ~3 seconds. It's the system equivalent of saying "do you mean X?"
-> - **<0.55 (NOVEL)**: You have no idea. Full LLM-as-compiler kicks in — expensive, slow, but creative.
->
-> The 0.55 threshold is the critical one. Below it, you burn tokens. Above it, you don't. Getting this threshold right is the difference between a reflex engine that learns and one that keeps asking for help.
->
-> The confidence feedback loop is the secret sauce: every successful run *feeds itself*. The more you use a reflex, the faster it gets, the cheaper it gets, the more confident the system becomes. The system quite literally learns to stop thinking about things it already knows how to do — which is, ironically, the most human thing about it.
-
----
-
-## The Rigging: Your Agent's Portable Identity
-
-Pincher agents carry their **rigging** (reflexes, identity, preferences) with them everywhere:
+### One-Line Installer
 
 ```bash
-# Pack your agent's rig into a .nail file
-./pincher pack my-agent.nail
-
-# Unpack the rig on a new shell
-./pincher unpack my-agent.nail
+curl -fsSL https://raw.githubusercontent.com/SuperInstance/pincher/main/install.sh | bash
 ```
 
-The `.nail` format is a portable tar.zst archive with BLAKE3 checksums:
+This checks for Rust, builds from source, and installs the `pincher` binary to `~/.local/bin/`.
+
+---
+
+## CLI
+
+The `pincher` binary is the primary interface. All commands are wired in the CLI and backed by the core library:
+
+| Command | Purpose |
+|---------|---------|
+| `pincher status` | Engine status, reflex count, database path |
+| `pincher doctor` | Health check — ONNX model, SQLite, disk, embedding |
+| `pincher teach` | Interactive teach flow — store a new reflex |
+| `pincher do "..."` | Execute a natural language intent through the reflex engine |
+| `pincher reflexes` | List stored reflexes with confidence scores |
+| `pincher compile` | Read workspace manifest → compile to WASM reflex |
+| `pincher mature` | Adversarial fuzzing to expand vector search coverage |
+| `pincher bench` | Run benchmark suite (embed latency, teach/match latency) |
+| `pincher shell-info` | Hardware fingerprint |
+| `pincher pack --output agent.nail` | Pack state + identity into portable `.nail` file |
+| `pincher unpack --bundle agent.nail` | Unpack and merge `.nail` state |
+| `pincher run --bundle agent.nail "..."` | Execute a bundle against user input |
+| `pincher publish` | Publish bundle to registry (requires token) |
+| `pincher update` | Check for registry updates |
+| `pincher gastrolith` | Checkpoint migration management |
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PINCHER_DB` | `~/.pincher/reflexes.db` | Path to SQLite reflex database |
+| `PINCHER_LOG_LEVEL` | `warn` | Log verbosity |
+| `PINCHER_REGISTRY_URL` | `https://registry.pincher.dev` | Bundle registry URL |
+| `PINCHER_REGISTRY_TOKEN` | — | Authentication for publishing |
+
+### Quick Start
+
+```bash
+# Check the engine is alive
+pincher status
+
+# Run a health check
+pincher doctor
+
+# List stored reflexes
+pincher reflexes
+
+# Execute an intent
+pincher do "list files in current directory"
+
+# Teach a new reflex
+pincher teach
 ```
-agent.nail/
+
+---
+
+## Architecture
+
+The project is a Rust workspace with two crates:
+
+### `pincher-core/` — The Library
+
+All runtime logic lives here:
+
+| Module | What it does | Status |
+|--------|-------------|--------|
+| `reflex/engine.rs` | ReflexEngine — match, execute, teach, confidence loop | ✅ Implemented |
+| `reflex/matcher.rs` | Vector similarity matching with thresholds | ✅ Implemented |
+| `reflex/confidence.rs` | Multiplicative confidence update model | ✅ Implemented |
+| `db/` | SQLite-backed vector store with sqlite-vec | ✅ Implemented |
+| `embed/onnx.rs` | all-MiniLM-L6-v2 ONNX embeddings + hash fallback | ✅ Implemented |
+| `sandbox/bwrap.rs` | Bubblewrap sandbox with config + veto patterns | ✅ Implemented |
+| `migration/` | `.nail` pack/unpack with BLAKE3 + tar.zst | ✅ Implemented |
+| `rpc/` | JSON-RPC server for programmatic control | ✅ Implemented |
+| `resource/` | PID resource controller with budgets | ✅ Implemented |
+| `capability/` | Signed capability tokens and manifests | ✅ Implemented |
+| `security/veto.rs` | Veto engine — pattern-based pre-execution blocking | ✅ Implemented |
+| `shell/` | Shell fingerprinting | ✅ Implemented |
+| `immunology/` | Pattern-based immune system | ✅ Implemented |
+
+### `pincher-cli/` — The CLI Frontend
+
+A Clap-based CLI that exposes all core functionality through subcommands. Built with `tokio` for async execution.
+
+### Feature Flags
+
+`pincher-core` uses Cargo features for optional components:
+
+```bash
+# Enable all features
+cargo build --features "onnx,landlock,wasmtime"
+
+# Minimal build (hash-based embeddings only)
+cargo build
+```
+
+| Feature | What it enables |
+|---------|----------------|
+| `onnx` | Real ONNX Runtime embeddings (all-MiniLM-L6-v2) |
+| `landlock` | Linux Landlock sandboxing (kernel 5.13+) |
+| `wasmtime` | WASM guest module execution |
+
+---
+
+## The Vector Store
+
+Every reflex is stored as a row in an SQLite database with a 384-dimensional embedding vector:
+
+```sql
+-- The reflexes table (via sqlite-vec)
+CREATE TABLE reflexes (
+    id          TEXT PRIMARY KEY,
+    intent      TEXT NOT NULL,
+    action_sql  TEXT NOT NULL,
+    embedding   BLOB,       -- f32 vector, 384 elements
+    confidence  REAL DEFAULT 0.55,
+    invoke_count INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now')),
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+```
+
+This is **not** a hypothetical architecture. The schema exists at `registry_schema.sql`, the SQLite-backed store is wired in `pincher-core/src/db/schema.rs`, and vector search via `sqlite-vec` is production code.
+
+---
+
+## The Sandbox
+
+When Pincher executes a reflex, it runs in a **bubblewrap sandbox** (when available):
+
+- Default restricted: no network, `/usr`/`/lib` mounted read-only
+- Whitelisted common binaries only (`ls`, `cat`, `grep`, `touch`, etc.)
+- Dangerous patterns blocked at the string-matching level (`rm -rf /`, `mkfs`, `dd if=/dev/zero`, fork bombs)
+- Falls back to bare `std::process::Command` with a warning if `bwrap` is not installed
+
+The veto engine runs *before* the sandbox, checking the command against blocked patterns.
+
+---
+
+## The Rig: Portable Agent Identity
+
+Pack your agent's reflexes, identity, and configuration into a **`.nail` file** — a portable `tar.zst` archive with BLAKE3 checksums:
+
+```bash
+# Pack the whole rig
+pincher pack --output my-agent.nail
+
+# Unpack on another machine
+pincher unpack --bundle my-agent.nail
+```
+
+A `.nail` archive contains:
+```
+my-agent.nail
 ├── manifest.json       # Version, checksums, hardware fingerprint
-├── reflexes.db         # Full SQLite vector DB of reflexes
+├── reflexes.db         # Full SQLite vector DB
 ├── identity.json       # Agent name, preferences
 └── config.toml         # Resource thresholds
 ```
 
----
-
-> ⛏️ **DEEP CUT: Why `.nail` and Not Just a Tarball?**
->
-> Because tar doesn't know when it's been tampered with. BLAKE3 checksums mean the .nail file is self-verifying: unpack it on any machine, and manifest.json's checksums will tell you if even one byte has been changed.
->
-> The hardware fingerprint in the manifest isn't security — it's *stability*. When you unpack a .nail on a new machine, the fingerprint tells you "this rig was built on a different CPU architecture," which changes the WASM compilation targets. The runtime adapts.
->
-> Also: `.nail` because it hangs on. Pun absolutely intended.
+The `migration` module in `pincher-core` implements pack, unpack, verify, fingerprint, and compatibility scoring.
 
 ---
 
-## Developer Toolkit
+## Tools and Scripts
 
-All tooling lives in `tools/`:
+The `tools/` directory contains supporting scripts:
 
-| Tool | Purpose |
-|------|---------|
-| `baton-create.sh` | Create new I2I baton messages |
-| `baton-read.sh` | Read and verify existing batons |
-| `baton-spline.sh` | Distill insights into splines |
-| `baton-harbor-check.sh` | Scan for incoming batons |
-| `baton-flush.sh` | Run memory flush protocol before compaction |
-
----
-
-## Fleet Integration Patterns
-
-This system builds directly on the legacy cocapn-runtime fleet patterns:
-
-1. **Fleet Sync**: GitHub master → Tender → Edge agents
-2. **Baton Flush**: Always run `baton-flush.sh` before session end
-3. **Multi-Shell Cognition**: Sending chord-shaped payloads instead of full instructions
-4. **A/B Falsification**: Test new reflexes safely on low-risk terrain
+| Script | Purpose |
+|--------|---------|
+| `reflex-engine.sh` | Lightweight metacognitive daemon — scans disk/RAM pressure, runs reflexes |
+| `checkpoint.sh` | System checkpoint utility |
+| `fleet-scout.sh` | Fleet reconnaissance |
+| `gc-fleet.sh` | Fleet garbage collection |
+| `init-context.sh` | Context initialization |
+| `promote-reflex.sh` | Promote reflexes through confidence tiers |
+| `deepinfra_client.py` | DeepInfra API client for LLM routing |
+| `model_router.py` | Model routing logic |
 
 ---
 
-## Starter Repo Structure
+## Development
 
-Every pincher repo should follow this minimal structure:
+### Prerequisites
+
+- Rust 2024+ (see `rust-toolchain.toml`)
+- For ONNX features: `ort` library (optional)
+
+### Build
+
+```bash
+# Debug build
+cargo build
+
+# Release build
+cargo build --release
+
+# Release with all features
+cargo build --release --features "onnx,landlock,wasmtime"
+```
+
+### Codespace
+
+The repo includes a `.devcontainer/` with pre-configured Rust environment, GitHub CLI, and Python — ready for GitHub Codespaces.
+
+### Project Structure
+
 ```
 /
-├── pincher-icon.jpg                # Badge — this IS a SuperInstance agent
-├── CHARTER.md                    # Who I am, mission, fleet integration
-├── ABSTRACTION.md                # What plane I operate on
-├── STATE.md                      # Current status
-├── README.md                     # Boot and usage instructions
-├── boot.sh                        # Universal boot script
-├── .devcontainer/                 # Codespace config
-│   └── devcontainer.json
-└── splines/                      # Distilled insights
-└── reflexes/                     # Stored reflexes
-└── tools/                        # Local tooling
+├── Cargo.toml                 # Workspace root
+├── Cargo.lock
+├── rust-toolchain.toml        # Toolchain pinning
+├── pincher-core/              # Core library (all runtime logic)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── reflex/            # Reflex engine (match, execute, teach)
+│       ├── db/                # SQLite vector store
+│       ├── embed/             # ONNX + hash embeddings
+│       ├── sandbox/           # Bubblewrap isolation
+│       ├── migration/         # .nail pack/unpack
+│       ├── rpc/               # JSON-RPC server
+│       ├── resource/          # Resource controller
+│       └── ...
+├── pincher-cli/               # CLI frontend
+│   ├── Cargo.toml
+│   └── src/main.rs            # pincher binary
+├── pincher-infer/             # Python inference module
+│   ├── pincher_infer/
+│   └── tests/
+├── tools/                     # Supporting scripts
+├── scripts/                   # GC, dedup, self-heal scripts
+├── docs/                      # Architecture, roadmap, ADRs
+├── examples/                  # Code review, hello-reflex, smart-home
+├── assets/                    # Logo images
+├── config/pincher.toml        # Default configuration
+├── install.sh                 # One-line installer
+├── registry_schema.sql        # Registry SQL schema
+└── .devcontainer/             # Codespace config
 ```
 
 ---
 
-> ⛏️ **DEEP CUT: The Lighthouse Icon Is Not Decoration**
->
-> When you see the lighthouse badge on a repo, it means: *this repo IS an agent*. The repo doesn't describe the agent. The repo IS the agent. Clone it, inject env keys, boot it — it lives.
->
-> This is the inversion of traditional software development. Usually, the software lives on a server, and the repo is a snapshot. Here, the repo is the canonical home. The agent's state moves *through* the repo, but the repo itself is the permanent residence.
->
-> The lighthouse isn't just a logo. It's a pattern: light pulses out, ships navigate by it, and when the storm comes, the lighthouse is still there.
+## What This Is Not
+
+This list matters. The current README inherited a lot of "future-fantasy" from earlier documentation. Here is the honest picture:
+
+- **No "Lighthouse Keeper"** — there is no cloud fleet management API. The RPC module and fleet-scout script exist, but a centralized fleet coordinator does not.
+- **No "Tender"** — there is no edge-sync protocol. The `migration` module handles `.nail` file transfer, but automatic "Tender visits" are aspirational.
+- **No "Holodeck MUD"** — this does not exist and is not on the short-term roadmap.
+- **No `boot.sh`** — the legacy boot script was replaced by the `pincher` CLI. Run `pincher` commands directly.
+- **No Docker image on Docker Hub** — `superinstance/pincher` is not published. You build from source.
+- **No ESP32 build** — the `wasmtime` feature and `cargo build` target only host OSes.
+- **No instant-boot claims** — benchmark data is collected (see `benchmarks/`) but not yet published as guarantees.
+
+The project does **not** deploy in "5 modes." It deploys in exactly one mode: **build from source, run the binary**. That is the honest scope of v0.1.0.
 
 ---
 
-*Same crab. Bigger shell.*
+## Roadmap (Near-Term)
 
-*Boot it anywhere. It knows what to do.*
+These are the real priorities as documented in `docs/ROADWAY.md` and `docs/MVP_CHECKLIST.md`:
+
+1. **WASM guest execution** — the `wasmtime` feature is wired, guest protocol is defined
+2. **Landlock sandboxing** — the `landlock` feature is wired, needs production testing
+3. **Reflex registry** — the `publish` and `update` CLI commands are stubs; registry format is defined in `registry_schema.sql`
+4. **Multi-process execution** — sandbox can run more complex pipelines
+5. **Benchmark rigor** — formalize latency and confidence metrics
+
+---
+
+## License
+
+MIT OR Apache-2.0 — see `LICENSE`.
+
+---
+
+*🦀 Same crab. Bigger shell.*
+
+*The hermit crab finds the right shell for every situation — but it starts with the one it's in.*
