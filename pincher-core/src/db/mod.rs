@@ -141,7 +141,15 @@ impl Database {
         ram_mb: i64,
         gpu: &str,
     ) -> DbResult<()> {
-        schema::upsert_shell(&self.conn, fingerprint, hostname, os, cpu_count, ram_mb, gpu)?;
+        schema::upsert_shell(
+            &self.conn,
+            fingerprint,
+            hostname,
+            os,
+            cpu_count,
+            ram_mb,
+            gpu,
+        )?;
         Ok(())
     }
 
@@ -158,7 +166,8 @@ impl Database {
 
     /// Checkpoint the WAL.
     pub fn checkpoint_wal(&self) -> DbResult<()> {
-        self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        self.conn
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }
 

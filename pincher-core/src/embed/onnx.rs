@@ -16,11 +16,11 @@ use tracing::{debug, info, instrument, warn};
 use std::sync::Arc;
 
 #[cfg(feature = "onnx")]
+use ndarray::Array2;
+#[cfg(feature = "onnx")]
 use ort::session::Session;
 #[cfg(feature = "onnx")]
 use ort::value::Value;
-#[cfg(feature = "onnx")]
-use ndarray::Array2;
 
 /// Embedding dimensionality for all-MiniLM-L6-v2.
 pub const EMBEDDING_DIM: usize = 384;
@@ -285,7 +285,10 @@ impl Embedder {
             #[cfg(feature = "onnx")]
             EmbedderState::Loaded(session) => self.embed_onnx(session, text),
             EmbedderState::Fallback => {
-                debug!(text_preview = &text[..text.len().min(50)], "Using deterministic hash embedding (model not loaded)");
+                debug!(
+                    text_preview = &text[..text.len().min(50)],
+                    "Using deterministic hash embedding (model not loaded)"
+                );
                 Ok(deterministic_embedding(text))
             }
         }
@@ -307,27 +310,21 @@ impl Embedder {
 
         // Create input tensors
         let input_ids_tensor = Value::from_array(
-            Array2::from_shape_vec(
-                (1, seq_len),
-                tokens.input_ids,
-            )
-            .map_err(|e| EmbedError::Tokenization(format!("Failed to create input_ids tensor: {}", e)))?,
+            Array2::from_shape_vec((1, seq_len), tokens.input_ids).map_err(|e| {
+                EmbedError::Tokenization(format!("Failed to create input_ids tensor: {}", e))
+            })?,
         )?;
 
         let attention_mask_tensor = Value::from_array(
-            Array2::from_shape_vec(
-                (1, seq_len),
-                tokens.attention_mask,
-            )
-            .map_err(|e| EmbedError::Tokenization(format!("Failed to create attention_mask tensor: {}", e)))?,
+            Array2::from_shape_vec((1, seq_len), tokens.attention_mask).map_err(|e| {
+                EmbedError::Tokenization(format!("Failed to create attention_mask tensor: {}", e))
+            })?,
         )?;
 
         let token_type_ids_tensor = Value::from_array(
-            Array2::from_shape_vec(
-                (1, seq_len),
-                tokens.token_type_ids,
-            )
-            .map_err(|e| EmbedError::Tokenization(format!("Failed to create token_type_ids tensor: {}", e)))?,
+            Array2::from_shape_vec((1, seq_len), tokens.token_type_ids).map_err(|e| {
+                EmbedError::Tokenization(format!("Failed to create token_type_ids tensor: {}", e))
+            })?,
         )?;
 
         // Run inference
@@ -350,11 +347,7 @@ impl Embedder {
         }
 
         // Mean pooling: average over non-padding tokens
-        let attention_weights: Vec<f32> = tokens
-            .attention_mask
-            .iter()
-            .map(|&m| m as f32)
-            .collect();
+        let attention_weights: Vec<f32> = tokens.attention_mask.iter().map(|&m| m as f32).collect();
         let total_weight: f32 = attention_weights.iter().sum();
 
         let mut pooled = vec![0.0f32; EMBEDDING_DIM];
@@ -434,11 +427,15 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
     // Trigram-based hashing for local structure
     let chars: Vec<char> = text.chars().collect();
     for i in 0..chars.len().saturating_sub(2) {
-        let trigram: String = chars[i..i+3].iter().collect();
+        let trigram: String = chars[i..i + 3].iter().collect();
         let hash = sha2::Sha256::digest(trigram.as_bytes());
         for j in 0..8 {
             let idx = (hash[j] as usize) % EMBEDDING_DIM;
-            let sign = if hash[(j + 8) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };
+            let sign = if hash[(j + 8) % 32] % 2 == 0 {
+                1.0f32
+            } else {
+                -1.0f32
+            };
             vec[idx] += sign * 0.1;
         }
     }
@@ -449,7 +446,11 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
         let hash = sha2::Sha256::digest(word_lower.as_bytes());
         for j in 0..6 {
             let idx = (hash[j] as usize + j * 64) % EMBEDDING_DIM;
-            let sign = if hash[(j + 8) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };
+            let sign = if hash[(j + 8) % 32] % 2 == 0 {
+                1.0f32
+            } else {
+                -1.0f32
+            };
             vec[idx] += sign * 0.05;
         }
     }
@@ -458,7 +459,11 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
     let global_hash = sha2::Sha256::digest(text.as_bytes());
     for j in 0..12 {
         let idx = (global_hash[j] as usize) % EMBEDDING_DIM;
-        let sign = if global_hash[(j + 12) % 32] % 2 == 0 { 1.0f32 } else { -1.0f32 };
+        let sign = if global_hash[(j + 12) % 32] % 2 == 0 {
+            1.0f32
+        } else {
+            -1.0f32
+        };
         vec[idx] += sign * 0.08;
     }
 
@@ -475,10 +480,7 @@ fn deterministic_embedding(text: &str) -> Vec<f32> {
 
 /// Get the default model path.
 fn default_model_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| {
-        home.join(DEFAULT_MODEL_DIR)
-            .join(DEFAULT_MODEL_FILENAME)
-    })
+    dirs::home_dir().map(|home| home.join(DEFAULT_MODEL_DIR).join(DEFAULT_MODEL_FILENAME))
 }
 
 /// Download the ONNX model to the default location.
@@ -499,9 +501,9 @@ pub fn download_model(output_path: Option<&Path>) -> EmbedResult<PathBuf> {
         .args([
             "-L",
             "-o",
-            output_path.to_str().ok_or_else(|| {
-                EmbedError::Download("Invalid output path encoding".into())
-            })?,
+            output_path
+                .to_str()
+                .ok_or_else(|| EmbedError::Download("Invalid output path encoding".into()))?,
             DEFAULT_MODEL_URL,
         ])
         .status()

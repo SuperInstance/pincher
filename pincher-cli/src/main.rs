@@ -32,9 +32,7 @@ enum Commands {
     Teach,
 
     /// Execute a natural language intent through the reflex engine
-    Do { 
-        input: String 
-    },
+    Do { input: String },
 
     /// Read workspace manifest, compile to WASM reflex
     Compile {
@@ -89,7 +87,11 @@ enum Commands {
         #[arg(long)]
         bundle: PathBuf,
 
-        #[arg(long, env = "PINCHER_REGISTRY_URL", default_value = "https://registry.pincher.dev")]
+        #[arg(
+            long,
+            env = "PINCHER_REGISTRY_URL",
+            default_value = "https://registry.pincher.dev"
+        )]
         registry_url: String,
 
         #[arg(long, env = "PINCHER_REGISTRY_TOKEN")]
@@ -98,8 +100,18 @@ enum Commands {
 
     /// Update installed reflex bundles
     Update {
-        #[arg(long, env = "PINCHER_REGISTRY_URL", default_value = "https://registry.pincher.dev")]
+        #[arg(
+            long,
+            env = "PINCHER_REGISTRY_URL",
+            default_value = "https://registry.pincher.dev"
+        )]
         registry_url: String,
+    },
+
+    /// Manage gastrolith checkpoint migration
+    Gastrolith {
+        #[command(subcommand)]
+        command: GastrolithCommands,
     },
 }
 
@@ -128,7 +140,9 @@ fn main() -> Result<()> {
         Commands::Compile { workspace } => {
             println!("[*] Reading workspace path: {:?}", workspace);
             println!("[*] Dispatching compilation tasks to the cloud compiler engine...");
-            println!("[+] Rust source code synthesized successfully based on Intent contract rules.");
+            println!(
+                "[+] Rust source code synthesized successfully based on Intent contract rules."
+            );
             println!("[*] Invoking toolchain compiler for target: wasm32-wasip1");
             println!("[SUCCESS] WASM binary compilation finished. Payload optimized to 142 KB.");
         }
@@ -136,7 +150,10 @@ fn main() -> Result<()> {
             manifest,
             database: _,
         } => {
-            println!("[*] Starting adversarial fuzzing loop for intent target: {:?}", manifest);
+            println!(
+                "[*] Starting adversarial fuzzing loop for intent target: {:?}",
+                manifest
+            );
             println!("[+] Expanded seed matrix into 28 semantic test coordinates.");
             println!("[*] Computing dense floating vector arrays...");
             println!("[SUCCESS] Deep vector space serialization complete. 28 nodes loaded into local database layout.");
@@ -144,17 +161,20 @@ fn main() -> Result<()> {
         Commands::Pack { output } => {
             println!("[*] Assembling and validation tracking for workspace: ./");
             println!("[+] Structural bundle assertions passed successfully.");
-            println!("[+] Archive construction finalized at: {}", output.display());
-            println!("[SUCCESS] Cryptographic verification signature issued at: {}.sig", output.display());
+            println!(
+                "[+] Archive construction finalized at: {}",
+                output.display()
+            );
+            println!(
+                "[SUCCESS] Cryptographic verification signature issued at: {}.sig",
+                output.display()
+            );
             println!("--> Ready for distributed distribution. Deployment size: 210.45 KB");
         }
         Commands::Unpack { bundle } => {
             println!("[*] Unpacking bundle: {:?}", bundle);
         }
-        Commands::Run {
-            bundle,
-            input,
-        } => {
+        Commands::Run { bundle, input } => {
             println!("[*] Verifying package integrity...");
             println!("[*] Decoding file contents to runtime cache spaces...");
             println!("[*] Transforming user strings to coordinates...");
@@ -193,15 +213,12 @@ fn main() -> Result<()> {
         Commands::Update { registry_url } => {
             println!("🔄 Checking for updates at {}", registry_url);
         }
+        Commands::Gastrolith { command } => {
+            println!("🦀 Gastrolith command: {:?}", command);
+        }
     }
 
     Ok(())
-}
-    /// Manage gastrolith checkpoint migration
-    Gastrolith {
-        #[command(subcommand)]
-        command: GastrolithCommands,
-    },
 }
 
 #[derive(clap::Subcommand, Debug)]

@@ -49,13 +49,7 @@ impl std::fmt::Display for ShellFingerprint {
         write!(
             f,
             "{}@{} ({} {}, {} CPUs, {}MB RAM, GPU: {})",
-            self.hostname,
-            self.os,
-            self.os,
-            self.os_version,
-            self.cpu_count,
-            self.ram_mb,
-            self.gpu
+            self.hostname, self.os, self.os, self.os_version, self.cpu_count, self.ram_mb, self.gpu
         )
     }
 }
@@ -98,13 +92,7 @@ pub fn fingerprint() -> FingerprintResult<ShellFingerprint> {
 pub fn fingerprint_hash(fp: &ShellFingerprint) -> String {
     let canonical = format!(
         "{}|{}|{}|{}|{}|{}|{}",
-        fp.hostname,
-        fp.os,
-        fp.os_version,
-        fp.cpu_count,
-        fp.ram_mb,
-        fp.gpu,
-        fp.mac_hash
+        fp.hostname, fp.os, fp.os_version, fp.cpu_count, fp.ram_mb, fp.gpu, fp.mac_hash
     );
 
     blake3::hash(canonical.as_bytes()).to_hex().to_string()
@@ -178,13 +166,14 @@ pub fn compatibility_score(a: &ShellFingerprint, b: &ShellFingerprint) -> f32 {
 /// Detect GPU information.
 fn detect_gpu() -> String {
     // Try lspci first (Linux)
-    if let Ok(output) = std::process::Command::new("lspci")
-        .output()
-    {
+    if let Ok(output) = std::process::Command::new("lspci").output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             let line_lower = line.to_lowercase();
-            if line_lower.contains("vga") || line_lower.contains("3d") || line_lower.contains("display") {
+            if line_lower.contains("vga")
+                || line_lower.contains("3d")
+                || line_lower.contains("display")
+            {
                 // Extract GPU name
                 if let Some(colon_pos) = line.find(':') {
                     let gpu_name = line[colon_pos + 1..].trim();

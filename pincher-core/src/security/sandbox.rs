@@ -215,14 +215,27 @@ pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConf
 
     let mut bwrap_args = vec![
         "bwrap".to_string(),
-        "--ro-bind".to_string(), "/usr".to_string(), "/usr".to_string(),
-        "--ro-bind".to_string(), "/lib".to_string(), "/lib".to_string(),
-        "--ro-bind".to_string(), "/lib64".to_string(), "/lib64".to_string(),
-        "--ro-bind".to_string(), "/bin".to_string(), "/bin".to_string(),
-        "--ro-bind".to_string(), "/sbin".to_string(), "/sbin".to_string(),
-        "--dev".to_string(), "/dev".to_string(),
-        "--proc".to_string(), "/proc".to_string(),
-        "--tmpfs".to_string(), "/tmp".to_string(),
+        "--ro-bind".to_string(),
+        "/usr".to_string(),
+        "/usr".to_string(),
+        "--ro-bind".to_string(),
+        "/lib".to_string(),
+        "/lib".to_string(),
+        "--ro-bind".to_string(),
+        "/lib64".to_string(),
+        "/lib64".to_string(),
+        "--ro-bind".to_string(),
+        "/bin".to_string(),
+        "/bin".to_string(),
+        "--ro-bind".to_string(),
+        "/sbin".to_string(),
+        "/sbin".to_string(),
+        "--dev".to_string(),
+        "/dev".to_string(),
+        "--proc".to_string(),
+        "/proc".to_string(),
+        "--tmpfs".to_string(),
+        "/tmp".to_string(),
     ];
 
     for path in &manifest.read_paths {
@@ -243,19 +256,22 @@ pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConf
         bwrap_args.push("--share-net".to_string());
     }
 
-    bwrap_args.extend_from_slice(&[
-        "--unshare-all".to_string(),
-        "--die-with-parent".to_string(),
-    ]);
+    bwrap_args.extend_from_slice(&["--unshare-all".to_string(), "--die-with-parent".to_string()]);
 
     let mut landlock_rules = Vec::new();
 
     for path in &manifest.read_paths {
-        landlock_rules.push(LandlockRule { path: path.clone(), access: "read".to_string() });
+        landlock_rules.push(LandlockRule {
+            path: path.clone(),
+            access: "read".to_string(),
+        });
     }
 
     for path in &manifest.write_paths {
-        landlock_rules.push(LandlockRule { path: path.clone(), access: "readwrite".to_string() });
+        landlock_rules.push(LandlockRule {
+            path: path.clone(),
+            access: "readwrite".to_string(),
+        });
     }
 
     let use_bwrap = which_bwrap().is_some();
@@ -275,14 +291,21 @@ pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConf
         timeout_secs: manifest.timeout_secs,
     };
 
-    info!(use_bwrap = config.use_bwrap, use_landlock = config.use_landlock, "Sandbox configuration built");
+    info!(
+        use_bwrap = config.use_bwrap,
+        use_landlock = config.use_landlock,
+        "Sandbox configuration built"
+    );
 
     Ok(config)
 }
 
 /// Execute a command in a sandboxed environment.
 #[instrument(skip(config))]
-pub fn execute_sandboxed(cmd: &str, config: &SandboxConfig) -> SandboxResult<std::process::ExitStatus> {
+pub fn execute_sandboxed(
+    cmd: &str,
+    config: &SandboxConfig,
+) -> SandboxResult<std::process::ExitStatus> {
     info!(cmd = cmd, "Executing sandboxed command");
 
     if config.use_bwrap {
@@ -292,7 +315,10 @@ pub fn execute_sandboxed(cmd: &str, config: &SandboxConfig) -> SandboxResult<std
     }
 }
 
-fn execute_with_bwrap(cmd: &str, config: &SandboxConfig) -> SandboxResult<std::process::ExitStatus> {
+fn execute_with_bwrap(
+    cmd: &str,
+    config: &SandboxConfig,
+) -> SandboxResult<std::process::ExitStatus> {
     let mut args = config.bwrap_args.clone();
 
     for (key, value) in &config.env_vars {
@@ -306,9 +332,8 @@ fn execute_with_bwrap(cmd: &str, config: &SandboxConfig) -> SandboxResult<std::p
 
     debug!(args = ?args, "Executing bwrap command");
 
-    let bwrap_path = which_bwrap().ok_or_else(|| {
-        SandboxError::BwrapNotFound("bwrap binary not found in PATH".to_string())
-    })?;
+    let bwrap_path = which_bwrap()
+        .ok_or_else(|| SandboxError::BwrapNotFound("bwrap binary not found in PATH".to_string()))?;
 
     let status = std::process::Command::new(bwrap_path)
         .args(&args[1..])
@@ -319,19 +344,25 @@ fn execute_with_bwrap(cmd: &str, config: &SandboxConfig) -> SandboxResult<std::p
     Ok(status)
 }
 
-fn execute_with_landlock(cmd: &str, _config: &SandboxConfig) -> SandboxResult<std::process::ExitStatus> {
+fn execute_with_landlock(
+    cmd: &str,
+    _config: &SandboxConfig,
+) -> SandboxResult<std::process::ExitStatus> {
     debug!(cmd = cmd, "Executing with landlock restrictions");
 
     #[cfg(feature = "landlock")]
     {
         let landlock_result = apply_landlock_rules(&_config.landlock_rules);
         match landlock_result {
-            Ok(()) => { debug!("Landlock rules applied successfully"); }
+            Ok(()) => {
+                debug!("Landlock rules applied successfully");
+            }
             Err(e) => {
                 // SECURITY: Fail closed — if landlock fails, do NOT execute
-                return Err(SandboxError::Landlock(
-                    format!("Failed to apply landlock rules — refusing to execute unsandboxed: {}", e)
-                ));
+                return Err(SandboxError::Landlock(format!(
+                    "Failed to apply landlock rules — refusing to execute unsandboxed: {}",
+                    e
+                )));
             }
         }
     }
@@ -373,9 +404,7 @@ fn apply_landlock_rules(rules: &[LandlockRule]) -> SandboxResult<()> {
                 _ => AccessFs::from_read(Access::all()),
             };
 
-            ruleset = ruleset.add_rule(
-                landlock::PathBeneath::new(&path, access),
-            );
+            ruleset = ruleset.add_rule(landlock::PathBeneath::new(&path, access));
         }
     }
 
@@ -384,9 +413,15 @@ fn apply_landlock_rules(rules: &[LandlockRule]) -> SandboxResult<()> {
         .map_err(|e| SandboxError::Landlock(format!("Failed to restrict self: {}", e)))?;
 
     match status {
-        RulesetStatus::FullyEnforced => { info!("Landlock fully enforced"); }
-        RulesetStatus::PartiallyEnforced => { warn!("Landlock partially enforced"); }
-        RulesetStatus::NotEnforced => { warn!("Landlock not enforced"); }
+        RulesetStatus::FullyEnforced => {
+            info!("Landlock fully enforced");
+        }
+        RulesetStatus::PartiallyEnforced => {
+            warn!("Landlock partially enforced");
+        }
+        RulesetStatus::NotEnforced => {
+            warn!("Landlock not enforced");
+        }
         _ => {}
     }
 

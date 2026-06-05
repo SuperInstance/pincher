@@ -52,7 +52,9 @@ pub enum GuestError {
     },
 
     /// The guest requires capabilities that the host is not willing to grant.
-    #[error("capability mismatch for {name}: guest requires {required:?} but host allows {allowed:?}")]
+    #[error(
+        "capability mismatch for {name}: guest requires {required:?} but host allows {allowed:?}"
+    )]
     CapabilityMismatch {
         /// Name of the guest module.
         name: String,

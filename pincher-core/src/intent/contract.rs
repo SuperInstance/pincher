@@ -194,10 +194,7 @@ impl IntentPattern {
 
         // Small bonus if the input length suggests a real match
         let length_ratio = if input.len() > 3 {
-            let template_non_placeholder_len: usize = literal_parts
-                .iter()
-                .map(|s| s.len())
-                .sum();
+            let template_non_placeholder_len: usize = literal_parts.iter().map(|s| s.len()).sum();
             if template_non_placeholder_len > 0 {
                 let ratio = input.len() as f64 / template_non_placeholder_len as f64;
                 if ratio > 0.3 && ratio < 10.0 {
@@ -607,14 +604,11 @@ impl IntentContract {
     /// This finds the best-matching pattern, extracts variables from the
     /// input, and substitutes them into the action template.
     pub fn resolve_action(&self, input: &str) -> String {
-        let best_pattern = self
-            .patterns
-            .iter()
-            .max_by(|a, b| {
-                a.match_score(input)
-                    .partial_cmp(&b.match_score(input))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+        let best_pattern = self.patterns.iter().max_by(|a, b| {
+            a.match_score(input)
+                .partial_cmp(&b.match_score(input))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         if let Some(pattern) = best_pattern {
             let variables = pattern.resolve_variables(input);
@@ -893,14 +887,23 @@ template = "greet {{name}}"
 
     #[test]
     fn test_conflict_strategy_default() {
-        assert_eq!(ConflictStrategy::default(), ConflictStrategy::HighestConfidence);
+        assert_eq!(
+            ConflictStrategy::default(),
+            ConflictStrategy::HighestConfidence
+        );
     }
 
     #[test]
     fn test_conflict_strategy_display() {
         assert_eq!(ConflictStrategy::FirstMatch.to_string(), "first_match");
-        assert_eq!(ConflictStrategy::HighestConfidence.to_string(), "highest_confidence");
-        assert_eq!(ConflictStrategy::HighestPriority.to_string(), "highest_priority");
+        assert_eq!(
+            ConflictStrategy::HighestConfidence.to_string(),
+            "highest_confidence"
+        );
+        assert_eq!(
+            ConflictStrategy::HighestPriority.to_string(),
+            "highest_priority"
+        );
         assert_eq!(ConflictStrategy::Merge.to_string(), "merge");
     }
 }

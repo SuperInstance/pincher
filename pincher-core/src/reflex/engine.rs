@@ -128,21 +128,18 @@ pub struct ReflexEngine {
 impl ReflexEngine {
     /// Create a new ReflexEngine with the given database connection and embedder.
     pub fn new(conn: Connection, embedder: Embedder) -> Self {
-        Self {
-            conn,
-            embedder,
-        }
+        Self { conn, embedder }
     }
 
     /// Create a new ReflexEngine by opening the database at the given path.
-    pub fn open(db_path: &std::path::Path, model_path: Option<&std::path::Path>) -> EngineResult<Self> {
+    pub fn open(
+        db_path: &std::path::Path,
+        model_path: Option<&std::path::Path>,
+    ) -> EngineResult<Self> {
         let conn = schema::init_db(db_path)?;
         let embedder = Embedder::new(model_path)?;
 
-        let engine = Self {
-            conn,
-            embedder,
-        };
+        let engine = Self { conn, embedder };
 
         // Seed embeddings for built-in reflexes (non-fatal)
         // We can't access conn after moving it, so we'll skip this for now
@@ -174,7 +171,11 @@ impl ReflexEngine {
 
         schema::insert_reflex(&self.conn, &id, intent, action, &embedding, 0.5)?;
 
-        info!(reflex_id = id, intent = intent, "New reflex taught successfully");
+        info!(
+            reflex_id = id,
+            intent = intent,
+            "New reflex taught successfully"
+        );
 
         Ok(Reflex {
             id,
@@ -259,7 +260,8 @@ impl ReflexEngine {
         };
         let veto_context = crate::security::veto::ExecutionContext::for_command(action_to_check);
         let veto_engine = crate::security::veto::VetoEngine::default();
-        let veto_result = veto_engine.check(action_to_check, &veto_context)
+        let veto_result = veto_engine
+            .check(action_to_check, &veto_context)
             .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
         match &veto_result {
             crate::security::veto::VetoDecision::Deny(reason) => {
@@ -324,7 +326,8 @@ impl ReflexEngine {
         };
         let veto_context = crate::security::veto::ExecutionContext::for_command(action_to_check);
         let veto_engine = crate::security::veto::VetoEngine::default();
-        let veto_result = veto_engine.check(action_to_check, &veto_context)
+        let veto_result = veto_engine
+            .check(action_to_check, &veto_context)
             .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
         match &veto_result {
             crate::security::veto::VetoDecision::Deny(reason) => {
@@ -385,21 +388,28 @@ impl ReflexEngine {
         let normalized = action_sql.trim().to_uppercase();
 
         if normalized.starts_with("SELECT") {
-            match self.conn.query_row(action_sql, [], |row| {
-                row.get::<_, String>(0)
-            }) {
+            match self
+                .conn
+                .query_row(action_sql, [], |row| row.get::<_, String>(0))
+            {
                 Ok(result) => Ok(result),
                 Err(e) => {
                     debug!(error = %e, "SQL execution failed — returning raw action");
                     Ok(format!("Action: {}", action_sql))
                 }
             }
-        } else if normalized.starts_with("INSERT") || normalized.starts_with("UPDATE") || normalized.starts_with("DELETE") {
+        } else if normalized.starts_with("INSERT")
+            || normalized.starts_with("UPDATE")
+            || normalized.starts_with("DELETE")
+        {
             match self.conn.execute(action_sql, []) {
                 Ok(rows_affected) => Ok(format!("OK: {} row(s) affected", rows_affected)),
                 Err(e) => {
                     debug!(error = %e, "SQL mutation failed");
-                    Err(EngineError::Execution(format!("SQL mutation failed: {}", e)))
+                    Err(EngineError::Execution(format!(
+                        "SQL mutation failed: {}",
+                        e
+                    )))
                 }
             }
         } else if action_sql.trim().starts_with("$") {
@@ -468,7 +478,9 @@ impl ReflexEngine {
             .env("HOME", "/tmp")
             .current_dir("/tmp")
             .output()
-            .map_err(|e| EngineError::Execution(format!("Failed to execute '{}': {}", binary, e)))?;
+            .map_err(|e| {
+                EngineError::Execution(format!("Failed to execute '{}': {}", binary, e))
+            })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -483,7 +495,9 @@ impl ReflexEngine {
         } else {
             Err(EngineError::Execution(format!(
                 "Command '{}' failed (exit {:?}): {}",
-                binary, output.status.code(), stderr.trim()
+                binary,
+                output.status.code(),
+                stderr.trim()
             )))
         }
     }
@@ -573,13 +587,11 @@ fn builtin_system_info() -> EngineResult<String> {
         "uptime_secs": System::uptime(),
     });
 
-    Ok(serde_json::to_string_pretty(&info)
-        .unwrap_or_else(|_| format!("{:?}", info)))
+    Ok(serde_json::to_string_pretty(&info).unwrap_or_else(|_| format!("{:?}", info)))
 }
 
 fn builtin_file_read(action: &str, input: &str) -> EngineResult<String> {
-    let path = extract_template_var(action, "path")
-        .unwrap_or_else(|| input.to_string());
+    let path = extract_template_var(action, "path").unwrap_or_else(|| input.to_string());
 
     // SECURITY: Validate path against traversal and sensitive locations
     let canonical = std::path::Path::new(&path).canonicalize().map_err(|e| {
@@ -590,46 +602,55 @@ fn builtin_file_read(action: &str, input: &str) -> EngineResult<String> {
 
     // Block sensitive paths
     const BLOCKED_PREFIXES: &[&str] = &[
-        "/etc/shadow", "/etc/ssh", "/root/.ssh", "/proc/self/environ",
-        "/etc/gshadow", "/etc/passwd-", "/etc/shadow-",
+        "/etc/shadow",
+        "/etc/ssh",
+        "/root/.ssh",
+        "/proc/self/environ",
+        "/etc/gshadow",
+        "/etc/passwd-",
+        "/etc/shadow-",
     ];
     for prefix in BLOCKED_PREFIXES {
         if path_str.starts_with(prefix) {
-            return Err(EngineError::Execution(
-                format!("Access to '{}' is forbidden by security policy", prefix)
-            ));
+            return Err(EngineError::Execution(format!(
+                "Access to '{}' is forbidden by security policy",
+                prefix
+            )));
         }
     }
 
-    let content = std::fs::read_to_string(&canonical).map_err(|e| {
-        EngineError::Execution(format!("Failed to read file '{}': {}", path, e))
-    })?;
+    let content = std::fs::read_to_string(&canonical)
+        .map_err(|e| EngineError::Execution(format!("Failed to read file '{}': {}", path, e)))?;
 
     Ok(content)
 }
 
 fn builtin_file_write(action: &str, input: &str) -> EngineResult<String> {
-    let path = extract_template_var(action, "path")
-        .unwrap_or_else(|| "output.txt".to_string());
+    let path = extract_template_var(action, "path").unwrap_or_else(|| "output.txt".to_string());
 
-    let content = extract_template_var(action, "content")
-        .unwrap_or_else(|| input.to_string());
+    let content = extract_template_var(action, "content").unwrap_or_else(|| input.to_string());
 
     // SECURITY: Restrict writes to safe directories only
-    let parent = std::path::Path::new(&path).parent().unwrap_or(std::path::Path::new("."));
-    let canonical_dir = parent.canonicalize().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let parent = std::path::Path::new(&path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let canonical_dir = parent
+        .canonicalize()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
     let dir_str = canonical_dir.to_string_lossy();
 
     const SAFE_DIRS: &[&str] = &["/tmp", "/var/tmp"];
-    if !SAFE_DIRS.iter().any(|d| dir_str.starts_with(d)) && !path.starts_with("./") && !path.starts_with("output") {
+    if !SAFE_DIRS.iter().any(|d| dir_str.starts_with(d))
+        && !path.starts_with("./")
+        && !path.starts_with("output")
+    {
         return Err(EngineError::Execution(
-            "File writes are restricted to /tmp, /var/tmp, and relative paths".into()
+            "File writes are restricted to /tmp, /var/tmp, and relative paths".into(),
         ));
     }
 
-    std::fs::write(&path, content).map_err(|e| {
-        EngineError::Execution(format!("Failed to write file '{}': {}", path, e))
-    })?;
+    std::fs::write(&path, content)
+        .map_err(|e| EngineError::Execution(format!("Failed to write file '{}': {}", path, e)))?;
 
     Ok(format!("Successfully wrote to {}", path))
 }
@@ -659,23 +680,24 @@ fn builtin_process_list() -> EngineResult<String> {
 }
 
 fn builtin_process_kill(action: &str, input: &str) -> EngineResult<String> {
-    let pid_str = extract_template_var(action, "pid")
-        .unwrap_or_else(|| input.to_string());
+    let pid_str = extract_template_var(action, "pid").unwrap_or_else(|| input.to_string());
 
-    let pid: u32 = pid_str.trim().parse().map_err(|_| {
-        EngineError::Execution(format!("Invalid PID: '{}'", pid_str))
-    })?;
+    let pid: u32 = pid_str
+        .trim()
+        .parse()
+        .map_err(|_| EngineError::Execution(format!("Invalid PID: '{}'", pid_str)))?;
 
     // SECURITY: Block killing system processes and self
     let self_pid = std::process::id();
     if pid <= 100 {
-        return Err(EngineError::Execution(
-            format!("Cannot kill system process (PID {} <= 100)", pid)
-        ));
+        return Err(EngineError::Execution(format!(
+            "Cannot kill system process (PID {} <= 100)",
+            pid
+        )));
     }
     if pid == self_pid {
         return Err(EngineError::Execution(
-            "Cannot kill self (PincherOS process)".into()
+            "Cannot kill self (PincherOS process)".into(),
         ));
     }
 
@@ -686,15 +708,18 @@ fn builtin_process_kill(action: &str, input: &str) -> EngineResult<String> {
     let pid_obj = Pid::from_u32(pid);
     if let Some(process) = sys.process(pid_obj) {
         process.kill();
-        Ok(format!("Killed process {} ({})", pid, process.name().to_string_lossy()))
+        Ok(format!(
+            "Killed process {} ({})",
+            pid,
+            process.name().to_string_lossy()
+        ))
     } else {
         Err(EngineError::Execution(format!("Process {} not found", pid)))
     }
 }
 
 fn builtin_network_ping(action: &str, input: &str) -> EngineResult<String> {
-    let host = extract_template_var(action, "host")
-        .unwrap_or_else(|| input.to_string());
+    let host = extract_template_var(action, "host").unwrap_or_else(|| input.to_string());
 
     let timeout = extract_template_var(action, "timeout_ms")
         .and_then(|t| t.parse::<u64>().ok())
@@ -716,8 +741,7 @@ fn builtin_network_ping(action: &str, input: &str) -> EngineResult<String> {
 }
 
 fn builtin_git_status(action: &str, input: &str) -> EngineResult<String> {
-    let repo_path = extract_template_var(action, "repo_path")
-        .unwrap_or_else(|| input.to_string());
+    let repo_path = extract_template_var(action, "repo_path").unwrap_or_else(|| input.to_string());
 
     let output = std::process::Command::new("git")
         .args(["status", "--porcelain"])
@@ -729,11 +753,9 @@ fn builtin_git_status(action: &str, input: &str) -> EngineResult<String> {
 }
 
 fn builtin_git_diff(action: &str, _input: &str) -> EngineResult<String> {
-    let repo_path = extract_template_var(action, "repo_path")
-        .unwrap_or_else(|| ".".to_string());
+    let repo_path = extract_template_var(action, "repo_path").unwrap_or_else(|| ".".to_string());
 
-    let revision = extract_template_var(action, "revision")
-        .unwrap_or_else(|| "HEAD".to_string());
+    let revision = extract_template_var(action, "revision").unwrap_or_else(|| "HEAD".to_string());
 
     let output = std::process::Command::new("git")
         .args(["diff", &revision])
@@ -746,31 +768,48 @@ fn builtin_git_diff(action: &str, _input: &str) -> EngineResult<String> {
 
 fn builtin_docker_ps() -> EngineResult<String> {
     let output = std::process::Command::new("docker")
-        .args(["ps", "--format", "{{.ID}}\\t{{.Image}}\\t{{.Status}}\\t{{.Names}}"])
+        .args([
+            "ps",
+            "--format",
+            "{{.ID}}\\t{{.Image}}\\t{{.Status}}\\t{{.Names}}",
+        ])
         .output()
         .map_err(|e| EngineError::Execution(format!("Failed to run docker ps: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(EngineError::Execution(format!("docker ps failed: {}", stderr)));
+        return Err(EngineError::Execution(format!(
+            "docker ps failed: {}",
+            stderr
+        )));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn builtin_env_get(action: &str, input: &str) -> EngineResult<String> {
-    let var_name = extract_template_var(action, "name")
-        .unwrap_or_else(|| input.to_string());
+    let var_name = extract_template_var(action, "name").unwrap_or_else(|| input.to_string());
 
     // SECURITY: Only allow reading from a safe allowlist
     const SAFE_VARS: &[&str] = &[
-        "HOME", "USER", "SHELL", "LANG", "PATH", "TERM", "EDITOR",
-        "PWD", "OLDPWD", "HOSTNAME", "LOGNAME", "COLORTERM",
+        "HOME",
+        "USER",
+        "SHELL",
+        "LANG",
+        "PATH",
+        "TERM",
+        "EDITOR",
+        "PWD",
+        "OLDPWD",
+        "HOSTNAME",
+        "LOGNAME",
+        "COLORTERM",
     ];
     if !SAFE_VARS.contains(&var_name.as_str()) {
-        return Err(EngineError::Execution(
-            format!("Reading environment variable '{}' is not permitted — only safe variables are allowed", var_name)
-        ));
+        return Err(EngineError::Execution(format!(
+            "Reading environment variable '{}' is not permitted — only safe variables are allowed",
+            var_name
+        )));
     }
 
     match std::env::var(&var_name) {

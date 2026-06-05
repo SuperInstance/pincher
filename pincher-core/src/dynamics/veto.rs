@@ -109,7 +109,9 @@ impl VetoEngine {
         if uses_network && !manifest.allows_network() && !manifest.permissions.is_empty() {
             return Some(VetoVerdict {
                 allowed: false,
-                reason: Some("command appears to use network but manifest has no network permission".into()),
+                reason: Some(
+                    "command appears to use network but manifest has no network permission".into(),
+                ),
                 confidence: 0.8,
             });
         }

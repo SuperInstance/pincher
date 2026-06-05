@@ -151,7 +151,7 @@ pub fn match_reflex_with_thresholds(
         );
 
         return Ok(MatchResult::Exact {
-            similarity,  // Use actual similarity, not inflated
+            similarity, // Use actual similarity, not inflated
             reflex: exact_reflex,
         });
     }
@@ -160,7 +160,11 @@ pub fn match_reflex_with_thresholds(
     let nearest = schema::search_nearest(conn, &query_embedding, 5)?;
 
     if nearest.is_empty() {
-        info!(intent = intent, match_type = "novel", "No reflexes found — novel territory");
+        info!(
+            intent = intent,
+            match_type = "novel",
+            "No reflexes found — novel territory"
+        );
         return Ok(MatchResult::Novel {
             best_similarity: 0.0,
         });
@@ -216,9 +220,7 @@ pub fn match_reflex_with_thresholds(
             reflex: best_reflex,
         }
     } else {
-        MatchResult::Novel {
-            best_similarity,
-        }
+        MatchResult::Novel { best_similarity }
     };
 
     Ok(result)

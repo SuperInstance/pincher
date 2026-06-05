@@ -190,7 +190,10 @@ impl<'a> CapabilityGate<'a> {
                     tracing::debug!(path, "file_read permitted");
                     Ok(())
                 } else {
-                    tracing::warn!(path, "file_read denied — no FsRead permission covers this path");
+                    tracing::warn!(
+                        path,
+                        "file_read denied — no FsRead permission covers this path"
+                    );
                     Err(GateError::PermissionDenied {
                         function: function.clone(),
                         reason: format!("no FsRead permission covers path {:?}", path),
@@ -203,7 +206,10 @@ impl<'a> CapabilityGate<'a> {
                     tracing::debug!(path, "file_write permitted");
                     Ok(())
                 } else {
-                    tracing::warn!(path, "file_write denied — no FsWrite permission covers this path");
+                    tracing::warn!(
+                        path,
+                        "file_write denied — no FsWrite permission covers this path"
+                    );
                     Err(GateError::PermissionDenied {
                         function: function.clone(),
                         reason: format!("no FsWrite permission covers path {:?}", path),
@@ -216,7 +222,11 @@ impl<'a> CapabilityGate<'a> {
                     // Additional scope check: does any NetConnect permission
                     // cover this host?
                     let covered = self.manifest.permissions.iter().any(|p| {
-                        if let Permission::NetConnect { host: allowed_host, port: allowed_port } = p {
+                        if let Permission::NetConnect {
+                            host: allowed_host,
+                            port: allowed_port,
+                        } = p
+                        {
                             // Wildcard host "*" matches anything.
                             let host_ok = allowed_host == "*" || allowed_host == host;
                             let port_ok = *allowed_port == 0 || *allowed_port == *port;
@@ -230,13 +240,21 @@ impl<'a> CapabilityGate<'a> {
                         tracing::debug!(host, port, "net_request permitted");
                         Ok(())
                     } else {
-                        tracing::warn!(host, port, "net_request denied — no NetConnect permission covers this host:port");
+                        tracing::warn!(
+                            host,
+                            port,
+                            "net_request denied — no NetConnect permission covers this host:port"
+                        );
                         Err(GateError::OutOfScope {
                             resource: format!("{}:{}", host, port),
                         })
                     }
                 } else {
-                    tracing::warn!(host, port, "net_request denied — no network permission in manifest");
+                    tracing::warn!(
+                        host,
+                        port,
+                        "net_request denied — no network permission in manifest"
+                    );
                     Err(GateError::PermissionDenied {
                         function: function.clone(),
                         reason: "no NetConnect permission in manifest".into(),
@@ -249,7 +267,10 @@ impl<'a> CapabilityGate<'a> {
                     tracing::debug!(binary, "shell_exec permitted");
                     Ok(())
                 } else {
-                    tracing::warn!(binary, "shell_exec denied — no Execute permission for this binary");
+                    tracing::warn!(
+                        binary,
+                        "shell_exec denied — no Execute permission for this binary"
+                    );
                     Err(GateError::PermissionDenied {
                         function: function.clone(),
                         reason: format!("no Execute permission covers binary {:?}", binary),

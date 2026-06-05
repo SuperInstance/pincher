@@ -282,8 +282,12 @@ impl ResourceController {
         let cpu_error = cpu_pct / 100.0;
 
         let dt_secs = 1.0; // Assume 1 second between ticks
-        let ram_output = self.ram_state.update(ram_error, dt_secs, &self.ram_controller);
-        let cpu_output = self.cpu_state.update(cpu_error, dt_secs, &self.cpu_controller);
+        let ram_output = self
+            .ram_state
+            .update(ram_error, dt_secs, &self.ram_controller);
+        let cpu_output = self
+            .cpu_state
+            .update(cpu_error, dt_secs, &self.cpu_controller);
 
         // Convert PID output back to percentage (with smoothing)
         // Exponential moving average
@@ -481,8 +485,14 @@ mod tests {
         assert_eq!(controller.compute_state(50.0, 40.0), ResourceState::Normal);
         assert_eq!(controller.compute_state(75.0, 50.0), ResourceState::Light);
         assert_eq!(controller.compute_state(50.0, 70.0), ResourceState::Light);
-        assert_eq!(controller.compute_state(90.0, 40.0), ResourceState::Critical);
-        assert_eq!(controller.compute_state(50.0, 85.0), ResourceState::Critical);
+        assert_eq!(
+            controller.compute_state(90.0, 40.0),
+            ResourceState::Critical
+        );
+        assert_eq!(
+            controller.compute_state(50.0, 85.0),
+            ResourceState::Critical
+        );
     }
 
     #[test]
@@ -499,7 +509,11 @@ mod tests {
         let mut controller = ResourceController::new();
         let state = controller.tick();
         // On a typical dev machine, we should be in Normal or Light state
-        assert!(state == ResourceState::Normal || state == ResourceState::Light || state == ResourceState::Critical);
+        assert!(
+            state == ResourceState::Normal
+                || state == ResourceState::Light
+                || state == ResourceState::Critical
+        );
     }
 
     #[test]

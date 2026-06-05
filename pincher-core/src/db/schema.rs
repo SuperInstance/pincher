@@ -215,9 +215,9 @@ fn register_sqlite_vec() {
         debug!("Registering sqlite-vec extension (static auto-extension)");
         unsafe {
             #[allow(clippy::missing_transmute_annotations)]
-            rusqlite::ffi::sqlite3_auto_extension(Some(
-                std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ())
-            ));
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite_vec::sqlite3_vec_init as *const (),
+            )));
         }
         debug!("sqlite-vec extension registered successfully");
     });
@@ -364,10 +364,7 @@ pub fn seed_builtins(conn: &Connection) -> SqlResult<()> {
 
 /// Convert a float32 embedding vector to bytes for BLOB storage.
 pub fn embed_to_bytes(embedding: &[f32]) -> Vec<u8> {
-    embedding
-        .iter()
-        .flat_map(|f| f.to_le_bytes())
-        .collect()
+    embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
 /// Convert bytes from BLOB storage back to a float32 embedding vector.
@@ -724,7 +721,8 @@ mod tests {
     #[test]
     fn test_init_db_in_memory() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;").unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
 
         // Just test table creation without sqlite-vec (which requires the extension)
         conn.execute_batch(CREATE_MIGRATIONS).unwrap();

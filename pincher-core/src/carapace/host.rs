@@ -187,7 +187,12 @@ impl<'a> HostFunctionDispatcher<'a> {
     /// Requires `Permission::NetConnect` covering `host:port`.
     ///
     /// **MVP**: Returns a mock HTTP 200 response.
-    pub fn net_request(&self, host: &str, port: u16, _path: &str) -> HostResult<NetRequestResponse> {
+    pub fn net_request(
+        &self,
+        host: &str,
+        port: u16,
+        _path: &str,
+    ) -> HostResult<NetRequestResponse> {
         let function = HostFunction::NetRequest {
             host: host.into(),
             port,

@@ -11,6 +11,5 @@ pub use veto::{ExecutionContext, VetoDecision, VetoEngine, VetoError, VetoResult
 
 // Re-export key types from sandbox
 pub use sandbox::{
-    Capability, LandlockRule, SandboxConfig, SandboxError, SandboxResult,
-    SignedToken,
+    Capability, LandlockRule, SandboxConfig, SandboxError, SandboxResult, SignedToken,
 };

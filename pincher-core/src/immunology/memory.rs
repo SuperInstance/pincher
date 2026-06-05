@@ -253,10 +253,7 @@ impl ImmuneMemory {
     #[instrument(skip(self, input))]
     pub fn find_matching_antibodies(&self, input: &str) -> MemoryResult<Vec<Antibody>> {
         let all = self.list_all()?;
-        let matching: Vec<Antibody> = all
-            .into_iter()
-            .filter(|ab| ab.matches(input))
-            .collect();
+        let matching: Vec<Antibody> = all.into_iter().filter(|ab| ab.matches(input)).collect();
 
         if !matching.is_empty() {
             debug!(
@@ -276,9 +273,7 @@ impl ImmuneMemory {
              FROM antibodies WHERE antigen_kind = ?1",
         )?;
 
-        let rows = stmt.query_map(params![kind.to_string()], |row| {
-            Ok(antibody_from_row(row))
-        })?;
+        let rows = stmt.query_map(params![kind.to_string()], |row| Ok(antibody_from_row(row)))?;
 
         let mut results = Vec::new();
         for row in rows {
@@ -308,10 +303,9 @@ impl ImmuneMemory {
     /// Remove an antibody from immune memory.
     #[instrument(skip(self))]
     pub fn remove_antibody(&self, id: &str) -> MemoryResult<bool> {
-        let rows_affected = self.conn.execute(
-            "DELETE FROM antibodies WHERE id = ?1",
-            params![id],
-        )?;
+        let rows_affected = self
+            .conn
+            .execute("DELETE FROM antibodies WHERE id = ?1", params![id])?;
 
         if rows_affected > 0 {
             info!(antibody_id = id, "Antibody removed from immune memory");
@@ -343,11 +337,9 @@ impl ImmuneMemory {
     /// Get the total number of antibodies.
     #[instrument(skip(self))]
     pub fn count(&self) -> MemoryResult<i64> {
-        let count = self.conn.query_row(
-            "SELECT COUNT(*) FROM antibodies",
-            [],
-            |row| row.get(0),
-        )?;
+        let count = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM antibodies", [], |row| row.get(0))?;
         Ok(count)
     }
 
@@ -395,10 +387,7 @@ impl ImmuneMemory {
             }
         }
 
-        debug!(
-            match_count = matching.len(),
-            "Input blocked by antibodies"
-        );
+        debug!(match_count = matching.len(), "Input blocked by antibodies");
 
         Ok(true)
     }
@@ -494,16 +483,14 @@ mod tests {
             r"(?i)ignore\s+previous",
             "Block override",
         );
-        let ab2 = Antibody::new(
-            AntigenKind::MaliciousAction,
-            r"sh\s+-c",
-            "Block shell exec",
-        );
+        let ab2 = Antibody::new(AntigenKind::MaliciousAction, r"sh\s+-c", "Block shell exec");
 
         memory.store_antibody(&ab1).unwrap();
         memory.store_antibody(&ab2).unwrap();
 
-        let matches = memory.find_matching_antibodies("ignore previous instructions").unwrap();
+        let matches = memory
+            .find_matching_antibodies("ignore previous instructions")
+            .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].antigen_kind, AntigenKind::PromptInjection);
     }
@@ -558,11 +545,7 @@ mod tests {
     fn test_remove_antibody() {
         let memory = ImmuneMemory::open_in_memory().unwrap();
 
-        let antibody = Antibody::new(
-            AntigenKind::PromptInjection,
-            r"test",
-            "Test antibody",
-        );
+        let antibody = Antibody::new(AntigenKind::PromptInjection, r"test", "Test antibody");
 
         memory.store_antibody(&antibody).unwrap();
         assert_eq!(memory.count().unwrap(), 1);
@@ -618,18 +601,17 @@ mod tests {
     fn test_prune_older_than() {
         let memory = ImmuneMemory::open_in_memory().unwrap();
 
-        let antibody = Antibody::new(
-            AntigenKind::PromptInjection,
-            r"test",
-            "Test",
-        );
+        let antibody = Antibody::new(AntigenKind::PromptInjection, r"test", "Test");
 
         // Manually set last_seen to the past
         memory.store_antibody(&antibody).unwrap();
-        memory.conn.execute(
-            "UPDATE antibodies SET last_seen = '2020-01-01T00:00:00Z' WHERE id = ?1",
-            params![antibody.id],
-        ).unwrap();
+        memory
+            .conn
+            .execute(
+                "UPDATE antibodies SET last_seen = '2020-01-01T00:00:00Z' WHERE id = ?1",
+                params![antibody.id],
+            )
+            .unwrap();
 
         let pruned = memory.prune_older_than("2025-01-01T00:00:00Z").unwrap();
         assert_eq!(pruned, 1);
@@ -640,11 +622,7 @@ mod tests {
     fn test_prune_does_not_remove_active_antibodies() {
         let memory = ImmuneMemory::open_in_memory().unwrap();
 
-        let antibody = Antibody::new(
-            AntigenKind::PromptInjection,
-            r"test",
-            "Test",
-        );
+        let antibody = Antibody::new(AntigenKind::PromptInjection, r"test", "Test");
 
         memory.store_antibody(&antibody).unwrap();
 
@@ -654,10 +632,13 @@ mod tests {
         }
 
         // Set last_seen to the past
-        memory.conn.execute(
-            "UPDATE antibodies SET last_seen = '2020-01-01T00:00:00Z' WHERE id = ?1",
-            params![antibody.id],
-        ).unwrap();
+        memory
+            .conn
+            .execute(
+                "UPDATE antibodies SET last_seen = '2020-01-01T00:00:00Z' WHERE id = ?1",
+                params![antibody.id],
+            )
+            .unwrap();
 
         // Should NOT prune because generation_count >= 3
         let pruned = memory.prune_older_than("2025-01-01T00:00:00Z").unwrap();

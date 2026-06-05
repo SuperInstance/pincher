@@ -323,7 +323,10 @@ pub fn unpack_nail(nail_path: &Path, output_dir: &Path) -> PackResult<()> {
             }
         }
 
-        info!(reflex_count = manifest.reflex_count, "Nail archive verified and unpacked");
+        info!(
+            reflex_count = manifest.reflex_count,
+            "Nail archive verified and unpacked"
+        );
     } else {
         warn!("No manifest.json found in nail archive — skipping verification");
     }

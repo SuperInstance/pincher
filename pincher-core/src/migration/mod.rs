@@ -9,6 +9,6 @@ pub use fingerprint::{
     ShellFingerprint,
 };
 pub use pack::{
-    pack_nail, read_identity, read_manifest, unpack_nail, verify_nail, AgentConfig,
-    AgentIdentity, AgentPreferences, NailChecksums, NailManifest, PackError, PackResult,
+    pack_nail, read_identity, read_manifest, unpack_nail, verify_nail, AgentConfig, AgentIdentity,
+    AgentPreferences, NailChecksums, NailManifest, PackError, PackResult,
 };

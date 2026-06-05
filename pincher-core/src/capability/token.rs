@@ -32,7 +32,9 @@ impl CapabilityToken {
     pub fn mint(manifest: CapabilityManifest, ttl: Duration, secret: &[u8]) -> Self {
         let issued_at = Utc::now();
         let expires_at = issued_at + ttl;
-        let signature = compute_mac(&manifest, &issued_at, &expires_at, secret).to_hex().to_string();
+        let signature = compute_mac(&manifest, &issued_at, &expires_at, secret)
+            .to_hex()
+            .to_string();
 
         Self {
             manifest,

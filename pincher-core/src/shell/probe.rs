@@ -38,7 +38,9 @@ impl ShellProfile {
 
         let hostname = System::host_name().unwrap_or_else(|| "unknown".to_string());
 
-        let cpu_model = sys.cpus().first()
+        let cpu_model = sys
+            .cpus()
+            .first()
             .map(|c| c.brand().to_string())
             .unwrap_or_else(|| "unknown".to_string());
 

@@ -517,11 +517,13 @@ impl SchemaValidator {
         field: &SchemaField,
         path: &str,
     ) -> SchemaValidationResult<()> {
-        let s = value.as_str().ok_or_else(|| SchemaValidationError::TypeMismatch {
-            field: path.to_string(),
-            expected: "string".to_string(),
-            actual: json_type_name(value),
-        })?;
+        let s = value
+            .as_str()
+            .ok_or_else(|| SchemaValidationError::TypeMismatch {
+                field: path.to_string(),
+                expected: "string".to_string(),
+                actual: json_type_name(value),
+            })?;
 
         let len = s.len();
 
@@ -555,11 +557,13 @@ impl SchemaValidator {
         field: &SchemaField,
         path: &str,
     ) -> SchemaValidationResult<()> {
-        let n = value.as_f64().ok_or_else(|| SchemaValidationError::TypeMismatch {
-            field: path.to_string(),
-            expected: "number".to_string(),
-            actual: json_type_name(value),
-        })?;
+        let n = value
+            .as_f64()
+            .ok_or_else(|| SchemaValidationError::TypeMismatch {
+                field: path.to_string(),
+                expected: "number".to_string(),
+                actual: json_type_name(value),
+            })?;
 
         self.check_numeric_range(n, field, path)
     }
@@ -572,14 +576,20 @@ impl SchemaValidator {
         path: &str,
     ) -> SchemaValidationResult<()> {
         // Accept both integers and floats that happen to be whole numbers
-        let n = value.as_f64().ok_or_else(|| SchemaValidationError::TypeMismatch {
-            field: path.to_string(),
-            expected: "integer".to_string(),
-            actual: json_type_name(value),
-        })?;
+        let n = value
+            .as_f64()
+            .ok_or_else(|| SchemaValidationError::TypeMismatch {
+                field: path.to_string(),
+                expected: "integer".to_string(),
+                actual: json_type_name(value),
+            })?;
 
         if n.fract() != 0.0 {
-            warn!(path = path, value = n, "Expected integer but got fractional number");
+            warn!(
+                path = path,
+                value = n,
+                "Expected integer but got fractional number"
+            );
             return Err(SchemaValidationError::TypeMismatch {
                 field: path.to_string(),
                 expected: "integer".to_string(),
@@ -643,11 +653,13 @@ impl SchemaValidator {
         field: &SchemaField,
         path: &str,
     ) -> SchemaValidationResult<()> {
-        let arr = value.as_array().ok_or_else(|| SchemaValidationError::TypeMismatch {
-            field: path.to_string(),
-            expected: "array".to_string(),
-            actual: json_type_name(value),
-        })?;
+        let arr = value
+            .as_array()
+            .ok_or_else(|| SchemaValidationError::TypeMismatch {
+                field: path.to_string(),
+                expected: "array".to_string(),
+                actual: json_type_name(value),
+            })?;
 
         let count = arr.len();
 
@@ -695,11 +707,13 @@ impl SchemaValidator {
         field: &SchemaField,
         path: &str,
     ) -> SchemaValidationResult<()> {
-        let obj = value.as_object().ok_or_else(|| SchemaValidationError::TypeMismatch {
-            field: path.to_string(),
-            expected: "object".to_string(),
-            actual: json_type_name(value),
-        })?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| SchemaValidationError::TypeMismatch {
+                field: path.to_string(),
+                expected: "object".to_string(),
+                actual: json_type_name(value),
+            })?;
 
         // Check required fields
         if let Some(required) = &field.required {
@@ -775,34 +789,40 @@ mod tests {
 
     #[test]
     fn test_validate_string_length() {
-        let schema = OutputSchema::from_field(
-            SchemaField::string()
-                .with_min_length(2)
-                .with_max_length(5),
-        );
+        let schema =
+            OutputSchema::from_field(SchemaField::string().with_min_length(2).with_max_length(5));
         let validator = SchemaValidator::new();
 
-        assert!(validator.validate(&serde_json::json!("ab"), &schema).is_ok());
-        assert!(validator.validate(&serde_json::json!("abcde"), &schema).is_ok());
-        assert!(validator.validate(&serde_json::json!("a"), &schema).is_err());
-        assert!(validator.validate(&serde_json::json!("abcdef"), &schema).is_err());
+        assert!(validator
+            .validate(&serde_json::json!("ab"), &schema)
+            .is_ok());
+        assert!(validator
+            .validate(&serde_json::json!("abcde"), &schema)
+            .is_ok());
+        assert!(validator
+            .validate(&serde_json::json!("a"), &schema)
+            .is_err());
+        assert!(validator
+            .validate(&serde_json::json!("abcdef"), &schema)
+            .is_err());
     }
 
     #[test]
     fn test_validate_integer() {
-        let schema = OutputSchema::from_field(
-            SchemaField::integer()
-                .with_minimum(0.0)
-                .with_maximum(100.0),
-        );
+        let schema =
+            OutputSchema::from_field(SchemaField::integer().with_minimum(0.0).with_maximum(100.0));
         let validator = SchemaValidator::new();
 
         assert!(validator.validate(&serde_json::json!(0), &schema).is_ok());
         assert!(validator.validate(&serde_json::json!(50), &schema).is_ok());
         assert!(validator.validate(&serde_json::json!(100), &schema).is_ok());
         assert!(validator.validate(&serde_json::json!(-1), &schema).is_err());
-        assert!(validator.validate(&serde_json::json!(101), &schema).is_err());
-        assert!(validator.validate(&serde_json::json!(3.15), &schema).is_err());
+        assert!(validator
+            .validate(&serde_json::json!(101), &schema)
+            .is_err());
+        assert!(validator
+            .validate(&serde_json::json!(3.15), &schema)
+            .is_err());
     }
 
     #[test]
@@ -848,11 +868,17 @@ mod tests {
         );
         let validator = SchemaValidator::new();
 
-        assert!(validator.validate(&serde_json::json!([1, 2, 3]), &schema).is_ok());
+        assert!(validator
+            .validate(&serde_json::json!([1, 2, 3]), &schema)
+            .is_ok());
         assert!(validator.validate(&serde_json::json!([1]), &schema).is_ok());
         assert!(validator.validate(&serde_json::json!([]), &schema).is_err());
-        assert!(validator.validate(&serde_json::json!([1, 2, 3, 4]), &schema).is_err());
-        assert!(validator.validate(&serde_json::json!(["not int"]), &schema).is_err());
+        assert!(validator
+            .validate(&serde_json::json!([1, 2, 3, 4]), &schema)
+            .is_err());
+        assert!(validator
+            .validate(&serde_json::json!(["not int"]), &schema)
+            .is_err());
     }
 
     #[test]
@@ -904,8 +930,12 @@ mod tests {
         let schema = OutputSchema::from_field(SchemaField::null());
         let validator = SchemaValidator::new();
 
-        assert!(validator.validate(&serde_json::Value::Null, &schema).is_ok());
-        assert!(validator.validate(&serde_json::json!("not null"), &schema).is_err());
+        assert!(validator
+            .validate(&serde_json::Value::Null, &schema)
+            .is_ok());
+        assert!(validator
+            .validate(&serde_json::json!("not null"), &schema)
+            .is_err());
     }
 
     #[test]
@@ -913,8 +943,14 @@ mod tests {
         let schema = OutputSchema::from_field(SchemaField::boolean());
         let validator = SchemaValidator::new();
 
-        assert!(validator.validate(&serde_json::json!(true), &schema).is_ok());
-        assert!(validator.validate(&serde_json::json!(false), &schema).is_ok());
-        assert!(validator.validate(&serde_json::json!("true"), &schema).is_err());
+        assert!(validator
+            .validate(&serde_json::json!(true), &schema)
+            .is_ok());
+        assert!(validator
+            .validate(&serde_json::json!(false), &schema)
+            .is_ok());
+        assert!(validator
+            .validate(&serde_json::json!("true"), &schema)
+            .is_err());
     }
 }

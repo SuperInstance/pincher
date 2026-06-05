@@ -70,9 +70,7 @@ impl VetoRule {
 
     /// Create a forbidden path rule.
     pub fn forbidden_path(path: impl Into<String>) -> Self {
-        VetoRule::ForbiddenPath {
-            path: path.into(),
-        }
+        VetoRule::ForbiddenPath { path: path.into() }
     }
 
     /// Create a max file size rule.
@@ -200,7 +198,9 @@ impl VetoEngine {
         let config: VetoConfig = toml::from_str(&content)?;
 
         info!(rule_count = config.rules.len(), "Loaded veto rules");
-        Ok(Self { rules: config.rules })
+        Ok(Self {
+            rules: config.rules,
+        })
     }
 
     /// Save the current rules to a TOML configuration file.
@@ -299,10 +299,7 @@ impl VetoEngine {
 
             VetoRule::RequireCapability { capability } => {
                 if !context.capabilities.contains(capability) {
-                    debug!(
-                        capability = capability,
-                        "Missing required capability"
-                    );
+                    debug!(capability = capability, "Missing required capability");
                     return Ok(VetoDecision::RequireConfirmation(format!(
                         "Action requires '{}' capability which is not granted",
                         capability
@@ -361,7 +358,6 @@ fn default_veto_rules() -> Vec<VetoRule> {
         VetoRule::ForbiddenCommand {
             pattern: "dd if=".to_string(),
         },
-
         // Protect system directories
         VetoRule::ForbiddenPath {
             path: "/etc".to_string(),
@@ -378,7 +374,6 @@ fn default_veto_rules() -> Vec<VetoRule> {
         VetoRule::ForbiddenPath {
             path: "/dev".to_string(),
         },
-
         // Require capabilities for specific dangerous operations
         // These trigger confirmation for network and subprocess commands
         // rather than blanket-blocking everything
@@ -398,12 +393,10 @@ fn default_veto_rules() -> Vec<VetoRule> {
             pattern: "nc ".to_string(),
             reason: "Netcat requires 'network' capability".to_string(),
         },
-
         // File size limit: 100MB
         VetoRule::MaxFileSize {
             max_bytes: 100 * 1024 * 1024,
         },
-
         // Block package manager operations (could modify system)
         VetoRule::ForbiddenCommand {
             pattern: "apt-get install".to_string(),
@@ -459,25 +452,26 @@ mod tests {
         let _engine = VetoEngine::with_defaults();
         // A custom engine with a RequireCapability rule
         let mut engine = VetoEngine::new();
-        engine.add_rule(VetoRule::RequireCapability { capability: "network".to_string() });
+        engine.add_rule(VetoRule::RequireCapability {
+            capability: "network".to_string(),
+        });
         let context = ExecutionContext::for_command("curl http://example.com");
         let decision = engine.check("curl http://example.com", &context).unwrap();
         assert!(decision.requires_confirmation());
         // With capability granted, should allow
-        let context_with_cap = ExecutionContext::for_command("curl http://example.com")
-            .with_capability("network");
-        let decision2 = engine.check("curl http://example.com", &context_with_cap).unwrap();
+        let context_with_cap =
+            ExecutionContext::for_command("curl http://example.com").with_capability("network");
+        let decision2 = engine
+            .check("curl http://example.com", &context_with_cap)
+            .unwrap();
         assert!(decision2.is_allowed());
     }
 
     #[test]
     fn test_veto_max_file_size() {
         let engine = VetoEngine::with_defaults();
-        let context = ExecutionContext::for_file_operation(
-            "write",
-            "/tmp/large",
-            Some(200 * 1024 * 1024),
-        );
+        let context =
+            ExecutionContext::for_file_operation("write", "/tmp/large", Some(200 * 1024 * 1024));
         let decision = engine.check("write /tmp/large", &context).unwrap();
         assert!(decision.is_denied());
     }

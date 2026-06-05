@@ -20,37 +20,33 @@ pub mod shell;
 
 // ── Crate-level re-exports ──────────────────────────────────────────
 
-pub use embed::{
-    EmbedError, EmbedResult,
-    cosine_similarity,
-    EMBEDDING_DIM,
-    download_model,
-};
+pub use embed::{cosine_similarity, download_model, EmbedError, EmbedResult, EMBEDDING_DIM};
 
 pub use reflex::{
-    EngineError, EngineResult, EngineStatus, Execution, MatchType,
-    MatchError, MatchThresholds,
+    EngineError, EngineResult, EngineStatus, Execution, MatchError, MatchThresholds, MatchType,
     Reflex, ReflexEngine,
 };
 
 pub use db::{
-    Database, DbError, DbResult,
     schema::{
-        ActionLogRow, ReflexRow, SessionRow, ShellRow,
+        bytes_to_embed, embed_to_bytes, ActionLogRow, ReflexRow, SessionRow, ShellRow,
         EMBEDDING_DIM as DB_EMBEDDING_DIM,
-        embed_to_bytes, bytes_to_embed,
     },
+    Database, DbError, DbResult,
 };
 
 pub use resource::{
-    PidController, ResourceBudget, ResourceController as ResourceCtrl, ResourceError, ResourceMetrics,
-    ResourceResult, ResourceState, ResourceThresholds,
+    PidController, ResourceBudget, ResourceController as ResourceCtrl, ResourceError,
+    ResourceMetrics, ResourceResult, ResourceState, ResourceThresholds,
 };
 
 pub use security::{
+    veto::{
+        ExecutionContext, VetoDecision, VetoEngine as SecVetoEngine, VetoError, VetoResult,
+        VetoRule,
+    },
     Capability as SecCapability, LandlockRule, SandboxConfig, SandboxError as SecSandboxError,
     SandboxResult as SecSandboxResult, SignedToken,
-    veto::{VetoDecision, VetoEngine as SecVetoEngine, VetoError, VetoResult, VetoRule, ExecutionContext},
 };
 
 pub use capability::{
@@ -59,12 +55,9 @@ pub use capability::{
 };
 
 pub use migration::{
-    compatibility_score, fingerprint, fingerprint_hash,
-    FingerprintError, FingerprintResult,
-    pack_nail, unpack_nail, verify_nail, read_manifest, read_identity,
-    AgentConfig, AgentIdentity, AgentPreferences, NailChecksums, NailManifest,
-    PackError, PackResult,
-    ShellFingerprint,
+    compatibility_score, fingerprint, fingerprint_hash, pack_nail, read_identity, read_manifest,
+    unpack_nail, verify_nail, AgentConfig, AgentIdentity, AgentPreferences, FingerprintError,
+    FingerprintResult, NailChecksums, NailManifest, PackError, PackResult, ShellFingerprint,
 };
 
 pub use rpc::{

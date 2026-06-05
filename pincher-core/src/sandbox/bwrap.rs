@@ -113,7 +113,11 @@ impl SandboxConfig {
         if self.executable_whitelist.is_empty() {
             return Ok(());
         }
-        if self.executable_whitelist.iter().any(|w| binary == w.as_str()) {
+        if self
+            .executable_whitelist
+            .iter()
+            .any(|w| binary == w.as_str())
+        {
             Ok(())
         } else {
             anyhow::bail!("binary '{}' is not in the executable whitelist", binary)
@@ -130,7 +134,11 @@ impl Sandbox {
     /// If `bwrap` is on `$PATH`, the command is run inside a bubblewrap
     /// sandbox.  Otherwise, a warning is logged and the command is run
     /// directly (unsandboxed).
-    pub fn execute(config: &SandboxConfig, command: &str, args: &[&str]) -> Result<ExecutionResult> {
+    pub fn execute(
+        config: &SandboxConfig,
+        command: &str,
+        args: &[&str],
+    ) -> Result<ExecutionResult> {
         // Check blocked patterns first — no execution at all.
         let full_cmd = format!("{} {}", command, args.join(" "));
         if config.is_blocked(&full_cmd) {
@@ -165,7 +173,11 @@ impl Sandbox {
     }
 
     /// Build and run a `bwrap` command line.
-    fn execute_bwrap(config: &SandboxConfig, command: &str, args: &[&str]) -> Result<ExecutionResult> {
+    fn execute_bwrap(
+        config: &SandboxConfig,
+        command: &str,
+        args: &[&str],
+    ) -> Result<ExecutionResult> {
         let mut bwrap_args: Vec<String> = Vec::new();
 
         // Mount /usr, /lib, etc. read-only.

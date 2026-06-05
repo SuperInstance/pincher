@@ -42,11 +42,26 @@ pub enum RpcRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub enum RpcResponse {
-    Ping { pong: String },
-    EmbedText { embedding: Vec<f32>, dimensions: usize },
-    MatchReflex { match_type: String, similarity: f32, reflex_id: Option<String> },
-    TeachReflex { reflex_id: String, intent: String, confidence: f64 },
-    GetStatus { status: EngineStatus },
+    Ping {
+        pong: String,
+    },
+    EmbedText {
+        embedding: Vec<f32>,
+        dimensions: usize,
+    },
+    MatchReflex {
+        match_type: String,
+        similarity: f32,
+        reflex_id: Option<String>,
+    },
+    TeachReflex {
+        reflex_id: String,
+        intent: String,
+        confidence: f64,
+    },
+    GetStatus {
+        status: EngineStatus,
+    },
 }
 
 /// JSON-RPC request structure.
@@ -130,7 +145,10 @@ pub async fn start_rpc_server(socket_path: &Path, engine: ReflexEngine) -> RpcRe
                     let _ = response_tx.send(response).await;
                 }
 
-                EngineCommand::MatchReflex { intent, response_tx } => {
+                EngineCommand::MatchReflex {
+                    intent,
+                    response_tx,
+                } => {
                     let result = crate::reflex::matcher::match_reflex(
                         engine.connection(),
                         engine.embedder(),
@@ -140,12 +158,14 @@ pub async fn start_rpc_server(socket_path: &Path, engine: ReflexEngine) -> RpcRe
                     let response = match result {
                         Ok(match_result) => {
                             let (match_type, similarity, reflex_id) = match &match_result {
-                                crate::reflex::matcher::MatchResult::Exact { similarity, reflex } => {
-                                    ("exact".to_string(), *similarity, Some(reflex.id.clone()))
-                                }
-                                crate::reflex::matcher::MatchResult::Similar { similarity, reflex } => {
-                                    ("similar".to_string(), *similarity, Some(reflex.id.clone()))
-                                }
+                                crate::reflex::matcher::MatchResult::Exact {
+                                    similarity,
+                                    reflex,
+                                } => ("exact".to_string(), *similarity, Some(reflex.id.clone())),
+                                crate::reflex::matcher::MatchResult::Similar {
+                                    similarity,
+                                    reflex,
+                                } => ("similar".to_string(), *similarity, Some(reflex.id.clone())),
                                 crate::reflex::matcher::MatchResult::Novel { best_similarity } => {
                                     ("novel".to_string(), *best_similarity, None)
                                 }
@@ -169,7 +189,11 @@ pub async fn start_rpc_server(socket_path: &Path, engine: ReflexEngine) -> RpcRe
                     let _ = response_tx.send(response).await;
                 }
 
-                EngineCommand::TeachReflex { intent, action, response_tx } => {
+                EngineCommand::TeachReflex {
+                    intent,
+                    action,
+                    response_tx,
+                } => {
                     let result = engine.teach(&intent, &action);
                     let response = match result {
                         Ok(reflex) => RpcResponse::TeachReflex {
@@ -218,7 +242,9 @@ pub async fn start_rpc_server(socket_path: &Path, engine: ReflexEngine) -> RpcRe
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600)) {
+        if let Err(e) =
+            std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600))
+        {
             warn!(error = %e, "Failed to set restrictive permissions on RPC socket");
         }
     }
@@ -245,28 +271,39 @@ pub async fn start_rpc_server(socket_path: &Path, engine: ReflexEngine) -> RpcRe
                             match reader.read_line(&mut line).await {
                                 Ok(0) => break,
                                 Ok(_) => {
-                                    let request: JsonRpcRequest = match serde_json::from_str(line.trim()) {
-                                        Ok(req) => req,
-                                        Err(e) => {
-                                            let error_response = JsonRpcResponse {
-                                                jsonrpc: "2.0".to_string(),
-                                                id: None,
-                                                result: None,
-                                                error: Some(RpcErrorValue {
-                                                    code: -32700,
-                                                    message: format!("Parse error: {}", e),
-                                                }),
-                                            };
-                                            let response_str = serde_json::to_string(&error_response).unwrap_or_default();
-                                            let _ = writer.write_all(format!("{}\n", response_str).as_bytes()).await;
-                                            continue;
-                                        }
-                                    };
+                                    let request: JsonRpcRequest =
+                                        match serde_json::from_str(line.trim()) {
+                                            Ok(req) => req,
+                                            Err(e) => {
+                                                let error_response = JsonRpcResponse {
+                                                    jsonrpc: "2.0".to_string(),
+                                                    id: None,
+                                                    result: None,
+                                                    error: Some(RpcErrorValue {
+                                                        code: -32700,
+                                                        message: format!("Parse error: {}", e),
+                                                    }),
+                                                };
+                                                let response_str =
+                                                    serde_json::to_string(&error_response)
+                                                        .unwrap_or_default();
+                                                let _ = writer
+                                                    .write_all(
+                                                        format!("{}\n", response_str).as_bytes(),
+                                                    )
+                                                    .await;
+                                                continue;
+                                            }
+                                        };
 
                                     let response = handle_request(request, &cmd_tx).await;
 
-                                    let response_str = serde_json::to_string(&response).unwrap_or_default();
-                                    if let Err(e) = writer.write_all(format!("{}\n", response_str).as_bytes()).await {
+                                    let response_str =
+                                        serde_json::to_string(&response).unwrap_or_default();
+                                    if let Err(e) = writer
+                                        .write_all(format!("{}\n", response_str).as_bytes())
+                                        .await
+                                    {
                                         warn!(error = %e, "Failed to write RPC response");
                                         break;
                                     }
@@ -378,7 +415,10 @@ async fn handle_request(
             let (response_tx, mut response_rx) = mpsc::channel(1);
 
             if cmd_tx
-                .send(EngineCommand::MatchReflex { intent, response_tx })
+                .send(EngineCommand::MatchReflex {
+                    intent,
+                    response_tx,
+                })
                 .await
                 .is_err()
             {
@@ -432,7 +472,11 @@ async fn handle_request(
             let (response_tx, mut response_rx) = mpsc::channel(1);
 
             if cmd_tx
-                .send(EngineCommand::TeachReflex { intent, action, response_tx })
+                .send(EngineCommand::TeachReflex {
+                    intent,
+                    action,
+                    response_tx,
+                })
                 .await
                 .is_err()
             {
