@@ -1,0 +1,68 @@
+# Level-3 Agent Activation
+# =========================
+# Trigger Pincher as a remote agent via GitHub Actions.
+# No clone needed — the agent runs ephemerally in CI/CD.
+#
+# Usage:
+#   1. Go to Actions → "Agent Activation"
+#   2. Click "Run workflow"
+#   3. Enter the command + env vars
+#   4. Output appears in run logs
+
+name: Agent Activation (Level-3)
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command for the agent to run'
+        required: true
+        default: 'pincher status'
+        type: string
+      agent_role:
+        description: 'Agent role for this run'
+        required: false
+        default: 'fleet-worker'
+        type: string
+      env_vars:
+        description: 'Extra env vars (JSON)'
+        required: false
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C target-cpu=native"
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup show
+          rustc --version
+          cargo --version
+
+      - name: Set extra env vars (if provided)
+        if: github.event.inputs.env_vars != ''
+        run: |
+          echo '${{ github.event.inputs.env_vars }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+
+      - name: Build (release)
+        run: cargo build --release 2>&1
+
+      - name: Execute Agent Command
+        run: |
+          echo "::group::Agent Identity"
+          echo "Agent: pincher (L3 via CI/CD)"
+          echo "Role: ${{ github.event.inputs.agent_role }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "::endgroup::"
+          echo ""
+          echo "::group::Command Output"
+          eval '${{ github.event.inputs.command }}'
+          echo "::endgroup::"
