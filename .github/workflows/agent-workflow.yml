@@ -49,6 +49,18 @@ env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest
+      - run: python3 -m pytest pincher-infer/tests/ -v
+
   execute-agent-task:
     runs-on: ubuntu-latest
     timeout-minutes: 30
