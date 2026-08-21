@@ -8,6 +8,10 @@
 
 ---
 
+*pincher's reflexes live on as **quilt-pincher** — the same engine, as reactive cells (github.com/SuperInstance/quilt-pincher).*
+
+---
+
 pincher is a reflex engine. A reflex is what happens when input meets pattern before thought arrives. Most AI systems think first — route every message through an LLM, burn tokens and milliseconds on questions that have already been answered a hundred times. pincher does the opposite. It responds in <50ms, without an LLM, every time, at zero marginal cost. The LLM is the thinking layer. pincher is the *shell* — the fast, durable structure that catches the simple cases so the thinking layer only fires when it needs to.
 
 There is no question of replacement. Warm-blooded thought and the spinal reflex are not in competition. The cortex teaches the spinal cord. The spinal cord gets faster. The shell protects the signal.
