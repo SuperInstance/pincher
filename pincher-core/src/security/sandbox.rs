@@ -208,8 +208,6 @@ pub struct LandlockRule {
     pub access: String,
 }
 
-/// Build sandbox configuration from a capability manifest.
-#[instrument(skip(manifest))]
 impl SandboxConfig {
     /// Does this configuration actually contain anything?
     ///
@@ -232,6 +230,8 @@ impl SandboxConfig {
     }
 }
 
+/// Build sandbox configuration from a capability manifest.
+#[instrument(skip(manifest))]
 pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConfig> {
     info!(manifest_id = %manifest.id, "Building sandbox configuration");
 
@@ -303,10 +303,10 @@ pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConf
             warn!("bwrap not found — falling back to landlock-only mode");
         } else {
             // The previous message here claimed a landlock fallback that is not
-            // configured: `landlock` is an opt-in feature and `default = []`, so a
-            // build without it has NO sandbox mechanism at all. A log line promising
-            // landlock-only mode is worse than silence, because it tells a reader the
-            // process is contained when it is not.
+            // configured: `landlock` is opt-in and `default = []`, so a build without
+            // it has NO sandbox mechanism at all. A log line promising landlock-only
+            // mode is worse than silence, because it tells a reader the process is
+            // contained when it is not.
             warn!(
                 "bwrap not found AND the `landlock` feature is not compiled in \
                  (default = []) — this SandboxConfig has NO active mechanism. \
