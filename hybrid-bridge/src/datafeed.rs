@@ -193,7 +193,12 @@ impl CsvFileFeed {
             let record = result.map_err(|e| {
                 HybridError::Io(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("CSV parse error at row {} in {}: {}", row_idx + 2, path.display(), e),
+                    format!(
+                        "CSV parse error at row {} in {}: {}",
+                        row_idx + 2,
+                        path.display(),
+                        e
+                    ),
                 ))
             })?;
 
@@ -465,9 +470,7 @@ impl std::fmt::Debug for CsvFileFeed {
 mod tests {
     use super::*;
     use crate::engine::MatrixEngine;
-    use crate::types::{
-        MatrixMetadata, MatrixSnapshot, PartialSnapshot,
-    };
+    use crate::types::{MatrixMetadata, MatrixSnapshot, PartialSnapshot};
     use async_trait::async_trait;
     use ndarray::Array1;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -687,21 +690,26 @@ mod tests {
         let matrix = SpyMatrixEngine::default();
 
         // Feed first batch (5 ticks) at tick=1.
-        let count = feed.feed_to_tensor(&matrix, 1).await.expect("feed_to_tensor failed");
+        let count = feed
+            .feed_to_tensor(&matrix, 1)
+            .await
+            .expect("feed_to_tensor failed");
         assert_eq!(count, 5);
 
         // Verify ingest was called 5 times.
         assert_eq!(matrix.ingest_count.load(Ordering::SeqCst), 5);
 
         // Verify last ingested ticker.
-        assert_eq!(
-            matrix.last_ticker.lock().unwrap().as_deref(),
-            Some("TSLA")
-        ); // 5th ticker sorted alphabetically
+        assert_eq!(matrix.last_ticker.lock().unwrap().as_deref(), Some("TSLA")); // 5th ticker sorted alphabetically
 
         // Verify features length.
         assert_eq!(
-            matrix.last_features.lock().unwrap().as_ref().map(|v| v.len()),
+            matrix
+                .last_features
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|v| v.len()),
             Some(4)
         );
 

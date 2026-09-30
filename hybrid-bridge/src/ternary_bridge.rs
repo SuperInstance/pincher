@@ -38,8 +38,8 @@
 //!    rather than naive majority, preserving nuance from high-conviction sources.
 
 use crate::types::{FinalPosition, PortfolioVector, TernaryGate};
-use ternary_types::{Ternary, TernaryMatrix, TritVector};
 use ternary_types::Ternary::{Negative, Neutral, Positive};
+use ternary_types::{Ternary, TernaryMatrix, TritVector};
 
 use std::fmt;
 
@@ -247,12 +247,16 @@ impl TritMapping {
 
             // From Negative → Positive: only if conviction jumped the entire
             // deadband (> upper - lower). Otherwise stay in Negative.
-            (Negative, Positive) if delta.abs() > (self.hysteresis.upper - self.hysteresis.lower) => {
+            (Negative, Positive)
+                if delta.abs() > (self.hysteresis.upper - self.hysteresis.lower) =>
+            {
                 Positive
             }
 
             // From Positive → Negative: same guard.
-            (Positive, Negative) if delta.abs() > (self.hysteresis.upper - self.hysteresis.lower) => {
+            (Positive, Negative)
+                if delta.abs() > (self.hysteresis.upper - self.hysteresis.lower) =>
+            {
                 Negative
             }
 
@@ -731,10 +735,7 @@ impl ConsensusComputer {
     /// Returns `TernaryBridgeError::EmptyConsensusSet` if `votes` is empty.
     /// Returns `TernaryBridgeError::TritVectorLengthMismatch` if the trit vectors
     /// have different lengths.
-    pub fn compute_consensus(
-        &self,
-        votes: &[WeightedTritVote],
-    ) -> TernaryBridgeResult<TritVector> {
+    pub fn compute_consensus(&self, votes: &[WeightedTritVote]) -> TernaryBridgeResult<TritVector> {
         if votes.is_empty() {
             return Err(TernaryBridgeError::EmptyConsensusSet);
         }
@@ -941,7 +942,11 @@ pub fn ternary_to_gate(trit: Ternary) -> TernaryGate {
 
 /// Convert a `TritVector` to a `Vec<TernaryGate>`.
 pub fn trit_vector_to_gates(trits: &TritVector) -> Vec<TernaryGate> {
-    trits.as_slice().iter().map(|&t| ternary_to_gate(t)).collect()
+    trits
+        .as_slice()
+        .iter()
+        .map(|&t| ternary_to_gate(t))
+        .collect()
 }
 
 /// Convert a slice of `TernaryGate` to a `TritVector`.
@@ -1099,9 +1104,9 @@ mod tests {
         let trits = encoder.encode(&portfolio).unwrap();
 
         assert_eq!(trits.len(), 3);
-        assert_eq!(trits.get(0), Some(Positive));  // AAPL: 0.85 ≥ 0.5
-        assert_eq!(trits.get(1), Some(Negative));  // TSLA: -0.72 ≤ -0.5
-        assert_eq!(trits.get(2), Some(Positive));  // MSFT: 0.1 < 0.5, but raw_gate=Bullish
+        assert_eq!(trits.get(0), Some(Positive)); // AAPL: 0.85 ≥ 0.5
+        assert_eq!(trits.get(1), Some(Negative)); // TSLA: -0.72 ≤ -0.5
+        assert_eq!(trits.get(2), Some(Positive)); // MSFT: 0.1 < 0.5, but raw_gate=Bullish
     }
 
     #[test]
@@ -1388,11 +1393,7 @@ mod tests {
         let source2 = TritVector::new(&[Positive, Neutral, Positive]);
         let source3 = TritVector::new(&[Neutral, Negative, Neutral]);
 
-        let sources = vec![
-            (&source1, 0.9),
-            (&source2, 0.8),
-            (&source3, 0.6),
-        ];
+        let sources = vec![(&source1, 0.9), (&source2, 0.8), (&source3, 0.6)];
 
         let result = computer.compute_consensus_multi(&sources).unwrap();
         assert_eq!(result.len(), 3);
@@ -1441,7 +1442,9 @@ mod tests {
             },
         ];
 
-        let result = computer.compute_consensus_from_proposals(&proposals).unwrap();
+        let result = computer
+            .compute_consensus_from_proposals(&proposals)
+            .unwrap();
         assert_eq!(result.get(0), Some(Positive));
     }
 
@@ -1465,12 +1468,23 @@ mod tests {
     fn test_trit_vector_to_gates() {
         let trits = TritVector::new(&[Positive, Neutral, Negative]);
         let gates = trit_vector_to_gates(&trits);
-        assert_eq!(gates, vec![TernaryGate::Bullish, TernaryGate::Neutral, TernaryGate::Bearish]);
+        assert_eq!(
+            gates,
+            vec![
+                TernaryGate::Bullish,
+                TernaryGate::Neutral,
+                TernaryGate::Bearish
+            ]
+        );
     }
 
     #[test]
     fn test_gates_to_trit_vector() {
-        let gates = vec![TernaryGate::Bullish, TernaryGate::Neutral, TernaryGate::Bearish];
+        let gates = vec![
+            TernaryGate::Bullish,
+            TernaryGate::Neutral,
+            TernaryGate::Bearish,
+        ];
         let trits = gates_to_trit_vector(&gates);
         assert_eq!(trits.as_slice(), &[Positive, Neutral, Negative]);
     }
@@ -1501,6 +1515,9 @@ mod tests {
         );
 
         let err = TernaryBridgeError::EmptyPortfolio;
-        assert_eq!(err.to_string(), "portfolio vector is empty — no positions to encode");
+        assert_eq!(
+            err.to_string(),
+            "portfolio vector is empty — no positions to encode"
+        );
     }
 }

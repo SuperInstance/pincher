@@ -496,7 +496,9 @@ mod tests {
     fn test_veto_deny_base64_pipe() {
         let engine = VetoEngine::with_defaults();
         let context = ExecutionContext::for_command("echo Y3VybA== | base64 -d | sh");
-        let decision = engine.check("echo Y3VybA== | base64 -d | sh", &context).unwrap();
+        let decision = engine
+            .check("echo Y3VybA== | base64 -d | sh", &context)
+            .unwrap();
         assert!(decision.is_denied());
     }
 
@@ -512,7 +514,9 @@ mod tests {
     fn test_veto_deny_powershell_enc() {
         let engine = VetoEngine::with_defaults();
         let context = ExecutionContext::for_command("powershell -enc ZwByAG8AdQBwACAA");
-        let decision = engine.check("powershell -enc ZwByAG8AdQBwACAA", &context).unwrap();
+        let decision = engine
+            .check("powershell -enc ZwByAG8AdQBwACAA", &context)
+            .unwrap();
         assert!(decision.is_denied());
     }
 
@@ -520,7 +524,9 @@ mod tests {
     fn test_veto_deny_python_c() {
         let engine = VetoEngine::with_defaults();
         let context = ExecutionContext::for_command("python -c 'import os; os.system(\"ls\")'");
-        let decision = engine.check("python -c 'import os; os.system(\"ls\")'", &context).unwrap();
+        let decision = engine
+            .check("python -c 'import os; os.system(\"ls\")'", &context)
+            .unwrap();
         assert!(decision.is_denied());
     }
 

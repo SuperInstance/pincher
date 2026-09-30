@@ -587,20 +587,18 @@ impl ReflexEngine {
         // TRUNCATE is ideal — resets the WAL to minimal size — but requires
         // that no other readers/writers hold the WAL open.
         // PRAGMA statements return rows; use query_row and discard the result.
-        if let Err(e) = self.conn.query_row(
-            "PRAGMA wal_checkpoint(TRUNCATE)",
-            [],
-            |_| Ok(()),
-        ) {
+        if let Err(e) = self
+            .conn
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+        {
             debug!(
                 error = %e,
                 "WAL checkpoint TRUNCATE failed, retrying with PASSIVE"
             );
-            if let Err(e2) = self.conn.query_row(
-                "PRAGMA wal_checkpoint(PASSIVE)",
-                [],
-                |_| Ok(()),
-            ) {
+            if let Err(e2) = self
+                .conn
+                .query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |_| Ok(()))
+            {
                 warn!("WAL checkpoint (PASSIVE) also failed: {}", e2);
             }
         }

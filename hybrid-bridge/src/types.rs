@@ -94,11 +94,11 @@ impl TernaryGate {
 pub struct RoomProposal {
     pub ticker: String,
     pub gate: TernaryGate,
-    pub conviction: f64,        // Continuous weight [0.0, 1.0]
-    pub confidence: f64,        // Reflex confidence [0.0, 1.0]
-    pub narrative_sig: String,  // Hash of the narrative (for audit)
-    pub matrix_agreement: f64,  // How much does this agree with matrix consensus? [0,1]
-    pub veto_override: bool,    // Agent flags this as "skeptical"
+    pub conviction: f64,       // Continuous weight [0.0, 1.0]
+    pub confidence: f64,       // Reflex confidence [0.0, 1.0]
+    pub narrative_sig: String, // Hash of the narrative (for audit)
+    pub matrix_agreement: f64, // How much does this agree with matrix consensus? [0,1]
+    pub veto_override: bool,   // Agent flags this as "skeptical"
     pub timestamp: u64,
 }
 
@@ -106,9 +106,9 @@ pub struct RoomProposal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureSuggestion {
     pub ticker: String,
-    pub feature_name: String, // e.g., "lithium_correlation"
-    pub source: String,       // e.g., "earnings_call_analysis"
-    pub urgency: f64,         // [0, 1]
+    pub feature_name: String,  // e.g., "lithium_correlation"
+    pub source: String,        // e.g., "earnings_call_analysis"
+    pub urgency: f64,          // [0, 1]
     pub sample_data: Vec<f64>, // 20 data points for initialization
 }
 
@@ -142,10 +142,10 @@ pub enum SaepAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalPosition {
     pub ticker: String,
-    pub weight: f64,              // Final allocation [-1.0, 1.0]
-    pub raw_gate: TernaryGate,   // What the room wanted
+    pub weight: f64,               // Final allocation [-1.0, 1.0]
+    pub raw_gate: TernaryGate,     // What the room wanted
     pub veto_applied: Vec<String>, // Which SAEP constraints fired
-    pub veto_severity: f64,      // [0 = no veto, 1 = full veto]
+    pub veto_severity: f64,        // [0 = no veto, 1 = full veto]
 }
 
 /// The final portfolio output.
@@ -160,7 +160,8 @@ pub struct PortfolioVector {
 }
 
 /// Type alias for the SAEP constraint check function.
-pub type CheckFn = Arc<dyn Fn(&RoomProposal, &HashMap<String, f64>) -> Result<(), Violation> + Send + Sync>;
+pub type CheckFn =
+    Arc<dyn Fn(&RoomProposal, &HashMap<String, f64>) -> Result<(), Violation> + Send + Sync>;
 
 /// A SAEP constraint pattern.
 pub struct SaepConstraint {
@@ -218,20 +219,11 @@ pub enum HybridMessage {
     /// From Veto to all: final portfolio vector
     PortfolioVectorBroadcast(PortfolioVector),
     /// From Matrix to specific Room: slice update
-    SliceUpdate {
-        ticker: String,
-        data: Array2<f32>,
-    },
+    SliceUpdate { ticker: String, data: Array2<f32> },
     /// Symmetry alert broadcast
-    SymmetryAlert {
-        tickers: Vec<String>,
-        score: f64,
-    },
+    SymmetryAlert { tickers: Vec<String>, score: f64 },
     /// System event (freeze, error, etc.)
-    SystemEvent {
-        kind: String,
-        payload: String,
-    },
+    SystemEvent { kind: String, payload: String },
 }
 
 impl HybridMessage {

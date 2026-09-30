@@ -193,8 +193,10 @@ impl VetoEngine for MockVetoEngine {
 
         self.total_proposals_processed
             .fetch_add(proposals.len() as u64, Ordering::Relaxed);
-        self.total_vetoes
-            .fetch_add(veto_applied_count(&final_positions) as u64, Ordering::Relaxed);
+        self.total_vetoes.fetch_add(
+            veto_applied_count(&final_positions) as u64,
+            Ordering::Relaxed,
+        );
 
         PortfolioVector {
             positions: final_positions,
@@ -232,5 +234,8 @@ impl VetoEngine for MockVetoEngine {
 
 /// Count position entries that had any veto applied.
 fn veto_applied_count(positions: &[FinalPosition]) -> usize {
-    positions.iter().filter(|p| !p.veto_applied.is_empty()).count()
+    positions
+        .iter()
+        .filter(|p| !p.veto_applied.is_empty())
+        .count()
 }

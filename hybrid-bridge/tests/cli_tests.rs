@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
-use hybrid_bridge::cli::{GateArg, HybridCli, HybridCliCommand, HybridSubcommand, run_hybrid_cli};
+use hybrid_bridge::cli::{run_hybrid_cli, GateArg, HybridCli, HybridCliCommand, HybridSubcommand};
 use hybrid_bridge::HybridBridge;
 use hybrid_bridge::TernaryGate;
 
@@ -42,9 +42,11 @@ fn test_cli_command_parser_status() {
 fn test_cli_command_parser_inject() {
     // `hybrid inject AAPL --features 0.1,0.5,-0.3`
     let cmd = HybridCliCommand::try_parse_from([
-        "hybrid", "inject",
+        "hybrid",
+        "inject",
         "AAPL",
-        "--features", "0.1,0.5,-0.3",
+        "--features",
+        "0.1,0.5,-0.3",
     ])
     .expect("`hybrid inject` should parse");
     match cmd.command {
@@ -59,12 +61,8 @@ fn test_cli_command_parser_inject() {
 #[test]
 fn test_cli_command_parser_inject_short_args() {
     // `hybrid inject AAPL -f 0.0,1.0,-1.0` with short form
-    let cmd = HybridCliCommand::try_parse_from([
-        "hybrid", "inject",
-        "AAPL",
-        "-f", "0.0,1.0,-1.0",
-    ])
-    .expect("`hybrid inject` with short args should parse");
+    let cmd = HybridCliCommand::try_parse_from(["hybrid", "inject", "AAPL", "-f", "0.0,1.0,-1.0"])
+        .expect("`hybrid inject` with short args should parse");
     match cmd.command {
         HybridSubcommand::Inject { ticker, features } => {
             assert_eq!(ticker, "AAPL");
@@ -105,11 +103,8 @@ fn test_cli_command_parser_snapshot() {
 #[test]
 fn test_cli_command_parser_propose() {
     // `hybrid propose AAPL bullish`
-    let cmd = HybridCliCommand::try_parse_from([
-        "hybrid", "propose",
-        "AAPL", "bullish",
-    ])
-    .expect("`hybrid propose` should parse");
+    let cmd = HybridCliCommand::try_parse_from(["hybrid", "propose", "AAPL", "bullish"])
+        .expect("`hybrid propose` should parse");
     match cmd.command {
         HybridSubcommand::Propose { ticker, gate, .. } => {
             assert_eq!(ticker, "AAPL");
@@ -123,10 +118,7 @@ fn test_cli_command_parser_propose() {
 fn test_cli_command_parser_propose_full() {
     // `hybrid propose TSLA bearish --conviction 0.6 --confidence 0.5`
     let cmd = HybridCliCommand::try_parse_from([
-        "hybrid", "propose",
-        "TSLA", "bearish",
-        "-w", "0.6",
-        "-C", "0.5",
+        "hybrid", "propose", "TSLA", "bearish", "-w", "0.6", "-C", "0.5",
     ])
     .expect("`hybrid propose` with all flags should parse");
     match cmd.command {
@@ -148,11 +140,8 @@ fn test_cli_command_parser_propose_full() {
 #[test]
 fn test_cli_command_parser_freeze() {
     // `hybrid freeze "Market circuit breaker"`
-    let cmd = HybridCliCommand::try_parse_from([
-        "hybrid", "freeze",
-        "Market circuit breaker",
-    ])
-    .expect("`hybrid freeze` should parse");
+    let cmd = HybridCliCommand::try_parse_from(["hybrid", "freeze", "Market circuit breaker"])
+        .expect("`hybrid freeze` should parse");
     match cmd.command {
         HybridSubcommand::Freeze { reason } => {
             assert_eq!(reason, "Market circuit breaker");
@@ -306,7 +295,10 @@ async fn test_unfreeze_emits_system_event() {
             assert_eq!(payload, "Integration test unfreeze");
         }
         other => {
-            panic!("Expected SystemEvent(unfreeze), got: {:?}", other.variant_name());
+            panic!(
+                "Expected SystemEvent(unfreeze), got: {:?}",
+                other.variant_name()
+            );
         }
     }
 }
@@ -324,9 +316,10 @@ async fn test_snapshot_broadcast_received() {
             tick: 100,
             n_stocks: 50,
             eigenvalues: vec![0.80, 0.12, 0.05, 0.02, 0.01],
-            eigenvectors: ndarray::Array2::from_shape_vec((2, 3), vec![
-                0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
-            ])
+            eigenvectors: ndarray::Array2::from_shape_vec(
+                (2, 3),
+                vec![0.5, 0.5, 0.5, -0.5, 0.5, -0.5],
+            )
             .unwrap(),
             topologies: vec![],
             universe_betti: [7, 3, 1],

@@ -32,16 +32,23 @@ fn main() {
     #[cfg(not(all(feature = "ternary-kernel", target_arch = "aarch64")))]
     println!("=== Kernel Benchmark (Scalar) ===");
 
-    println!("{:<10} {:<25} {:<25} {:<25} {:<25}",
-             "Dim", "Cosine Sim (mean)", "L2 Norm (mean)", "Scale (mean)", "Sim+Norm Combined");
-    println!("{:-<10} {:-<25} {:-<25} {:-<25} {:-<25}", "", "", "", "", "");
+    println!(
+        "{:<10} {:<25} {:<25} {:<25} {:<25}",
+        "Dim", "Cosine Sim (mean)", "L2 Norm (mean)", "Scale (mean)", "Sim+Norm Combined"
+    );
+    println!(
+        "{:-<10} {:-<25} {:-<25} {:-<25} {:-<25}",
+        "", "", "", "", ""
+    );
 
     for &dim in &dims {
         let n = 1000;
 
         // Generate random vectors
         let mut a: Vec<f32> = (0..dim).map(|i| (i as f32 + 1.0) / dim as f32).collect();
-        let b: Vec<f32> = (0..dim).map(|i| ((i * 7 + 3) as f32) / dim as f32).collect();
+        let b: Vec<f32> = (0..dim)
+            .map(|i| ((i * 7 + 3) as f32) / dim as f32)
+            .collect();
         let original_a = a.clone();
 
         // Warmup
@@ -90,7 +97,9 @@ fn main() {
         let scale_mean = mean_duration(&scale_durations);
         let combined_mean = mean_duration(&combined_durations);
 
-        println!("{:<10} {:<25?} {:<25?} {:<25?} {:<25?}",
-                 dim, cos_mean, l2_mean, scale_mean, combined_mean);
+        println!(
+            "{:<10} {:<25?} {:<25?} {:<25?} {:<25?}",
+            dim, cos_mean, l2_mean, scale_mean, combined_mean
+        );
     }
 }

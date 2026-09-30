@@ -324,15 +324,13 @@ impl HybridBridge {
 
     /// Try to submit a proposal without awaiting (non-blocking).
     pub fn try_submit_proposal(&self, proposal: RoomProposal) -> HybridResult<()> {
-        self.proposal_tx
-            .try_send(proposal)
-            .map_err(|e| match e {
-                mpsc::error::TrySendError::Full(_) => {
-                    self.metrics.message_dropped();
-                    crate::error::HybridError::Internal("Proposal channel full".into())
-                }
-                mpsc::error::TrySendError::Closed(_) => crate::error::HybridError::ChannelClosed,
-            })?;
+        self.proposal_tx.try_send(proposal).map_err(|e| match e {
+            mpsc::error::TrySendError::Full(_) => {
+                self.metrics.message_dropped();
+                crate::error::HybridError::Internal("Proposal channel full".into())
+            }
+            mpsc::error::TrySendError::Closed(_) => crate::error::HybridError::ChannelClosed,
+        })?;
         self.metrics.proposal_received();
         Ok(())
     }
@@ -439,7 +437,10 @@ mod tests {
             tick,
             n_stocks: 3,
             eigenvalues: vec![0.95, 0.03, 0.02],
-            eigenvectors: array![[FRAC_1_SQRT_2, FRAC_1_SQRT_2], [FRAC_1_SQRT_2, -FRAC_1_SQRT_2]],
+            eigenvectors: array![
+                [FRAC_1_SQRT_2, FRAC_1_SQRT_2],
+                [FRAC_1_SQRT_2, -FRAC_1_SQRT_2]
+            ],
             topologies: vec![],
             universe_betti: [3, 1, 0],
             regime: "stable".into(),

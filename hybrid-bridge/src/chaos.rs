@@ -121,7 +121,11 @@ mod tests {
     fn test_run_chaos_cycle_clean() {
         let mut tensor = Array3::<f32>::zeros((3, 4, 5));
         let result = run_chaos_cycle(&mut tensor, 5);
-        assert!(result.failures.is_empty(), "Failures: {:?}", result.failures);
+        assert!(
+            result.failures.is_empty(),
+            "Failures: {:?}",
+            result.failures
+        );
         assert_eq!(result.detected, result.masked);
         assert!(result.safe_mode_triggered);
     }
@@ -130,7 +134,11 @@ mod tests {
     fn test_run_chaos_cycle_large_injection() {
         let mut tensor = Array3::<f32>::ones((10, 20, 30));
         let result = run_chaos_cycle(&mut tensor, 50);
-        assert!(result.failures.is_empty(), "Failures: {:?}", result.failures);
+        assert!(
+            result.failures.is_empty(),
+            "Failures: {:?}",
+            result.failures
+        );
         assert_eq!(result.detected, result.masked);
         assert_eq!(result.injected, 50);
     }

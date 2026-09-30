@@ -43,10 +43,7 @@ impl RoomAgent for MockRoomAgent {
         _cross_section: Option<Array1<f32>>,
     ) -> RoomProposal {
         // Find the topology for this ticker to guide proposal generation
-        let topology = snapshot
-            .topologies
-            .iter()
-            .find(|t| t.ticker == self.ticker);
+        let topology = snapshot.topologies.iter().find(|t| t.ticker == self.ticker);
 
         // Determine gate based on ticker hash for reproducibility
         let hash: u64 = self.ticker.bytes().map(|b| b as u64).sum();
@@ -58,13 +55,10 @@ impl RoomAgent for MockRoomAgent {
         };
 
         // Use topology-derived confidence if available
-        let confidence = topology
-            .map(|t| t.confidence)
-            .unwrap_or(0.7);
+        let confidence = topology.map(|t| t.confidence).unwrap_or(0.7);
 
         // Simulate conviction based on the confidence and some noise based on ticker
-        let conviction =
-            (0.5 + (hash % 100) as f64 / 200.0).clamp(0.0, 1.0);
+        let conviction = (0.5 + (hash % 100) as f64 / 200.0).clamp(0.0, 1.0);
 
         let matrix_agreement = topology
             .map(|t| (t.confidence * 0.8 + 0.2).clamp(0.0, 1.0))

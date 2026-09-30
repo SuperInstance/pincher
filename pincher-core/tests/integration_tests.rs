@@ -46,7 +46,11 @@ fn test_confidence_loop_teach_execute_increases_confidence() {
     .expect("Reflex should exist");
 
     let result = engine.execute(&reflex_row.into(), "list files in directory");
-    assert!(result.is_ok(), "Execution should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Execution should succeed: {:?}",
+        result.err()
+    );
     let exec = result.unwrap();
     assert_eq!(exec.match_type, pincher_core::MatchType::Exact);
 
@@ -103,7 +107,9 @@ fn test_veto_engine_rejects_blocked_patterns() {
 
     // Base64 pipe to sh
     let ctx = ExecutionContext::for_command("echo 'Y3VybA==' | base64 -d | sh");
-    let d = engine.check("echo 'Y3VybA==' | base64 -d | sh", &ctx).unwrap();
+    let d = engine
+        .check("echo 'Y3VybA==' | base64 -d | sh", &ctx)
+        .unwrap();
     assert!(d.is_denied(), "Base64 pipe should be denied");
 
     // eval
@@ -123,7 +129,9 @@ fn test_veto_engine_rejects_blocked_patterns() {
 
     // python -c
     let ctx = ExecutionContext::for_command("python -c 'import os; os.system(\"ls\")'");
-    let d = engine.check("python -c 'import os; os.system(\"ls\")'", &ctx).unwrap();
+    let d = engine
+        .check("python -c 'import os; os.system(\"ls\")'", &ctx)
+        .unwrap();
     assert!(d.is_denied(), "python -c should be denied");
 
     // perl -e
@@ -213,7 +221,10 @@ fn test_cosine_similarity_math() {
     assert!((cosine_similarity(&a, &d) - (-1.0)).abs() < 1e-6);
 
     assert_eq!(cosine_similarity(&[], &[]), 0.0);
-    assert_eq!(cosine_similarity(&vec![0.0f32; 384], &vec![1.0f32; 384]), 0.0);
+    assert_eq!(
+        cosine_similarity(&vec![0.0f32; 384], &vec![1.0f32; 384]),
+        0.0
+    );
     assert_eq!(cosine_similarity(&[1.0], &[1.0, 2.0]), 0.0);
 }
 
@@ -250,8 +261,8 @@ fn test_sandbox_sandbox_capability_manifest() {
     // The security::sandbox::CapabilityManifest is a DIFFERENT type from
     // the capability::manifest::CapabilityManifest. It has new(), full(),
     // read_only(), with_capability(), to_token(), from_token(), etc.
-    use pincher_core::security::Capability;
     use pincher_core::security::sandbox::CapabilityManifest as SandboxManifest;
+    use pincher_core::security::Capability;
 
     let manifest = SandboxManifest::new("test-manifest")
         .with_capability(Capability::FilesystemRead)
@@ -365,7 +376,10 @@ fn test_edge_case_teach_then_do_command_match() {
 #[test]
 fn test_edge_case_embedder_fallback_consistency() {
     let embedder = pincher_core::embed::Embedder::new(None).unwrap();
-    assert!(!embedder.is_loaded(), "Without ONNX, embedder should use fallback");
+    assert!(
+        !embedder.is_loaded(),
+        "Without ONNX, embedder should use fallback"
+    );
 
     let e1 = embedder.embed("hello world").unwrap();
     let e2 = embedder.embed("hello world").unwrap();
@@ -414,9 +428,18 @@ fn test_sandbox_config_mechanism_never_overclaims() {
             );
         }
         None => {
-            assert!(!config.is_contained(), "no mechanism reported but is_contained() is true");
-            assert!(!config.use_bwrap, "no mechanism reported but use_bwrap is true");
-            assert!(!config.use_landlock, "no mechanism reported but use_landlock is true");
+            assert!(
+                !config.is_contained(),
+                "no mechanism reported but is_contained() is true"
+            );
+            assert!(
+                !config.use_bwrap,
+                "no mechanism reported but use_bwrap is true"
+            );
+            assert!(
+                !config.use_landlock,
+                "no mechanism reported but use_landlock is true"
+            );
         }
     }
 }
