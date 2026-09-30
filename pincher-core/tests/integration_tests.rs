@@ -381,26 +381,33 @@ fn test_edge_case_embedder_fallback_consistency() {
     );
 }
 
+/// Build a manifest the way the original test does. NOTE: there are TWO types called
+/// CapabilityManifest in this crate -- `security::capability::manifest::CapabilityManifest`
+/// and `security::sandbox::CapabilityManifest`. `build_sandbox` takes the SECOND one, and
+/// its constructors are `new` / `full` / `read_only` -- there is no `strict`.
+fn sandbox_manifest() -> pincher_core::security::sandbox::CapabilityManifest {
+    use pincher_core::security::sandbox::CapabilityManifest as SandboxManifest;
+    use pincher_core::security::Capability;
+    SandboxManifest::new("kat-manifest")
+        .with_capability(Capability::FilesystemRead)
+        .with_capability(Capability::Subprocess)
+        .with_read_path("/usr")
+}
+
 /// Regression: a SandboxConfig must never claim a mechanism it does not have.
 ///
 /// The `!use_bwrap` branch used to `warn!("... will use landlock-only mode")` while
 /// `use_landlock` was `cfg!(feature = "landlock")` with `default = []` -- so the log
 /// promised a fallback that was not compiled in, and the config contained nothing.
-/// The test pins the invariant so the two cannot drift apart again.
+/// This pins the invariant so the two can never drift apart again.
 #[test]
 fn test_sandbox_config_mechanism_never_overclaims() {
-    use pincher_core::security::sandbox::build_sandbox;
-    use pincher_core::security::CapabilityManifest;
+    let config = pincher_core::security::sandbox::build_sandbox(&sandbox_manifest())
+        .expect("sandbox config should build");
 
-    let manifest = CapabilityManifest::strict();
-    let config = build_sandbox(&manifest).expect("sandbox config should build");
-
-    // The headline assertion from the original test, restated as an invariant:
-    // either a mechanism is active, or the config is honestly empty and says so.
     let contained = config.is_contained();
     match config.active_mechanism() {
         Some(m) => {
-            // If a mechanism is named, its flag must actually be set.
             assert!(
                 (m == "bwrap" && config.use_bwrap) || (m == "landlock" && config.use_landlock),
                 "active_mechanism() named {m} but the corresponding flag is false"
@@ -414,19 +421,16 @@ fn test_sandbox_config_mechanism_never_overclaims() {
     }
 }
 
-/// The stronger form of the original assertion: CI installs bubblewrap precisely so
-/// that a real containment mechanism is active. If this ever fails on a runner, the
-/// install step in ci.yml has regressed.
+/// The original assertion, restated as an invariant CI can actually hold: the
+/// 'Install bubblewrap' step in .github/workflows/ci.yml exists precisely so a real
+/// mechanism is present. If this fails on a runner, that step has regressed.
 #[test]
 fn test_sandbox_has_a_real_mechanism_on_ci() {
-    use pincher_core::security::sandbox::build_sandbox;
-    use pincher_core::security::CapabilityManifest;
-
-    let manifest = CapabilityManifest::strict();
-    let config = build_sandbox(&manifest).expect("sandbox config should build");
+    let config = pincher_core::security::sandbox::build_sandbox(&sandbox_manifest())
+        .expect("sandbox config should build");
     assert!(
         config.is_contained(),
-        "no active sandbox mechanism — on CI, bubblewrap should be installed \
+        "no active sandbox mechanism - on CI, bubblewrap should be installed \
          (see the 'Install bubblewrap' step in .github/workflows/ci.yml)"
     );
 }
