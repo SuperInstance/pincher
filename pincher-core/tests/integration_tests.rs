@@ -380,3 +380,53 @@ fn test_edge_case_embedder_fallback_consistency() {
         sim
     );
 }
+
+/// Regression: a SandboxConfig must never claim a mechanism it does not have.
+///
+/// The `!use_bwrap` branch used to `warn!("... will use landlock-only mode")` while
+/// `use_landlock` was `cfg!(feature = "landlock")` with `default = []` -- so the log
+/// promised a fallback that was not compiled in, and the config contained nothing.
+/// The test pins the invariant so the two cannot drift apart again.
+#[test]
+fn test_sandbox_config_mechanism_never_overclaims() {
+    use pincher_core::security::sandbox::build_sandbox;
+    use pincher_core::security::CapabilityManifest;
+
+    let manifest = CapabilityManifest::strict();
+    let config = build_sandbox(&manifest).expect("sandbox config should build");
+
+    // The headline assertion from the original test, restated as an invariant:
+    // either a mechanism is active, or the config is honestly empty and says so.
+    let contained = config.is_contained();
+    match config.active_mechanism() {
+        Some(m) => {
+            // If a mechanism is named, its flag must actually be set.
+            assert!(
+                (m == "bwrap" && config.use_bwrap) || (m == "landlock" && config.use_landlock),
+                "active_mechanism() named {m} but the corresponding flag is false"
+            );
+        }
+        None => {
+            assert!(!contained, "no mechanism reported but is_contained() says true");
+            assert!(!config.use_bwrap, "no mechanism reported but use_bwrap is true");
+            assert!(!config.use_landlock, "no mechanism reported but use_landlock is true");
+        }
+    }
+}
+
+/// The stronger form of the original assertion: CI installs bubblewrap precisely so
+/// that a real containment mechanism is active. If this ever fails on a runner, the
+/// install step in ci.yml has regressed.
+#[test]
+fn test_sandbox_has_a_real_mechanism_on_ci() {
+    use pincher_core::security::sandbox::build_sandbox;
+    use pincher_core::security::CapabilityManifest;
+
+    let manifest = CapabilityManifest::strict();
+    let config = build_sandbox(&manifest).expect("sandbox config should build");
+    assert!(
+        config.is_contained(),
+        "no active sandbox mechanism — on CI, bubblewrap should be installed \
+         (see the 'Install bubblewrap' step in .github/workflows/ci.yml)"
+    );
+}
