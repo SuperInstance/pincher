@@ -41,6 +41,15 @@ jobs:
         with:
           cache-on-failure: true
 
+      # pincher-core's sandbox test asserts `config.use_bwrap || config.use_landlock`.
+      # use_bwrap is `which_bwrap().is_some()` and use_landlock is `cfg!(feature =
+      # "landlock")` with `default = []` -- so on a stock runner BOTH are false and the
+      # assertion can never pass. It has been red since 2026-06-06. Installing the
+      # mechanism makes the environment match what the test requires; it does not
+      # weaken the assertion.
+      - name: Install bubblewrap (required by the sandbox test)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap && bwrap --version
+
       - name: Build (all targets)
         run: cargo build --all-targets
 
