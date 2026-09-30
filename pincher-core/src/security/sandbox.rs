@@ -210,6 +210,28 @@ pub struct LandlockRule {
 
 /// Build sandbox configuration from a capability manifest.
 #[instrument(skip(manifest))]
+impl SandboxConfig {
+    /// Does this configuration actually contain anything?
+    ///
+    /// This is the queryable form of the property the `!use_bwrap` branch used to
+    /// describe incorrectly. It exists so callers -- and tests -- can ask, rather than
+    /// scrape a log line to find out whether the process is contained.
+    pub fn is_contained(&self) -> bool {
+        self.use_bwrap || self.use_landlock
+    }
+
+    /// The mechanism this config will actually use, or `None` if it will use none.
+    pub fn active_mechanism(&self) -> Option<&'static str> {
+        if self.use_bwrap {
+            Some("bwrap")
+        } else if self.use_landlock {
+            Some("landlock")
+        } else {
+            None
+        }
+    }
+}
+
 pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConfig> {
     info!(manifest_id = %manifest.id, "Building sandbox configuration");
 
@@ -275,15 +297,30 @@ pub fn build_sandbox(manifest: &CapabilityManifest) -> SandboxResult<SandboxConf
     }
 
     let use_bwrap = which_bwrap().is_some();
+    let use_landlock = cfg!(feature = "landlock");
     if !use_bwrap {
-        warn!("bwrap not found — sandbox will use landlock-only mode");
+        if use_landlock {
+            warn!("bwrap not found — falling back to landlock-only mode");
+        } else {
+            // The previous message here claimed a landlock fallback that is not
+            // configured: `landlock` is an opt-in feature and `default = []`, so a
+            // build without it has NO sandbox mechanism at all. A log line promising
+            // landlock-only mode is worse than silence, because it tells a reader the
+            // process is contained when it is not.
+            warn!(
+                "bwrap not found AND the `landlock` feature is not compiled in \
+                 (default = []) — this SandboxConfig has NO active mechanism. \
+                 Rebuild with --features landlock, or install bubblewrap. \
+                 Do not treat this config as a sandbox."
+            );
+        }
     }
 
     let config = SandboxConfig {
         bwrap_args,
         landlock_rules,
         use_bwrap,
-        use_landlock: cfg!(feature = "landlock"),
+        use_landlock,
         env_vars: vec![
             ("PATH".to_string(), "/usr/bin:/bin".to_string()),
             ("HOME".to_string(), "/tmp".to_string()),
