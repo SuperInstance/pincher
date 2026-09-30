@@ -195,7 +195,9 @@ pub fn init_db(path: &Path) -> SqlResult<Connection> {
     register_sqlite_vec();
 
     let conn = Connection::open(path)?;
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000")?;
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000",
+    )?;
 
     run_migrations(&conn)?;
     seed_builtins(&conn)?;
@@ -370,11 +372,10 @@ pub fn embed_to_bytes(embedding: &[f32]) -> Vec<u8> {
 /// Convert bytes from BLOB storage back to a float32 embedding vector.
 pub fn bytes_to_embed(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(4)
-        .map(|chunk| {
-            let arr: [u8; 4] = [chunk[0], chunk[1], chunk[2], chunk[3]];
-            f32::from_le_bytes(arr)
-        })
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|chunk| f32::from_le_bytes(*chunk))
         .collect()
 }
 
