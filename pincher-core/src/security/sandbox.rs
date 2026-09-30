@@ -423,7 +423,10 @@ fn execute_with_landlock(
 
 #[cfg(feature = "landlock")]
 fn apply_landlock_rules(rules: &[LandlockRule]) -> SandboxResult<()> {
-    use landlock::{ABI, Access, AccessFs, Ruleset, RulesetAttr, RulesetCreated, RulesetCreatedAttr, RulesetStatus, PathBeneath, PathFd};
+    use landlock::{
+        Access, AccessFs, PathBeneath, PathFd, Ruleset, RulesetAttr, RulesetCreated,
+        RulesetCreatedAttr, RulesetStatus, ABI,
+    };
 
     // #fix: from_all() takes ABI enum via Access trait; use V7 for latest features.
     let access_fs = <AccessFs as Access>::from_all(ABI::V7);
@@ -449,7 +452,7 @@ fn apply_landlock_rules(rules: &[LandlockRule]) -> SandboxResult<()> {
                     let mut flags = AccessFs::from_read(ABI::V7);
                     flags |= AccessFs::Execute;
                     flags
-                },
+                }
                 _ => AccessFs::from_read(ABI::V7),
             };
 

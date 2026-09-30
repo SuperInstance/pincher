@@ -98,12 +98,12 @@ pub mod types;
 
 /// Convenience re-exports for downstream consumers.
 pub mod prelude {
-    pub use crate::bridge::{BridgeMetrics, BridgeMetricSnapshot, HybridBridge};
+    pub use crate::bridge::{BridgeMetricSnapshot, BridgeMetrics, HybridBridge};
+    pub use crate::datafeed::{CsvFileFeed, MarketDataFeed, StockTick};
     pub use crate::engine::{
         DefaultVetoEngine, HybridConfig, HybridEngine, HybridEngineImpl, MatrixEngine, RoomAgent,
         VetoEngine,
     };
-    pub use crate::datafeed::{CsvFileFeed, MarketDataFeed, StockTick};
     pub use crate::error::{HybridError, HybridResult};
     pub use crate::mock_room::MockRoomAgent;
     pub use crate::mock_veto::MockVetoEngine;
@@ -117,12 +117,12 @@ pub mod prelude {
 
 // ── Crate-level re-exports (for ergonomic `use hybrid_bridge::*`) ────
 
-pub use bridge::{BridgeMetrics, BridgeMetricSnapshot, HybridBridge};
-pub use engine::{
-    DefaultVetoEngine, HybridConfig, HybridEngine, HybridEngineImpl, MatrixEngine as MatrixEngineTrait,
-    RoomAgent as RoomAgentTrait, VetoEngine as VetoEngineTrait,
-};
+pub use bridge::{BridgeMetricSnapshot, BridgeMetrics, HybridBridge};
 pub use datafeed::{CsvFileFeed, MarketDataFeed, StockTick};
+pub use engine::{
+    DefaultVetoEngine, HybridConfig, HybridEngine, HybridEngineImpl,
+    MatrixEngine as MatrixEngineTrait, RoomAgent as RoomAgentTrait, VetoEngine as VetoEngineTrait,
+};
 pub use error::{HybridError, HybridResult};
 pub use mock_room::MockRoomAgent;
 pub use mock_veto::MockVetoEngine;

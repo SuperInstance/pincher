@@ -18,11 +18,11 @@ use std::sync::Arc;
 #[cfg(feature = "onnx")]
 use ndarray::Array2;
 #[cfg(feature = "onnx")]
-use std::sync::Mutex;
-#[cfg(feature = "onnx")]
 use ort::session::{builder::GraphOptimizationLevel, Session};
 #[cfg(feature = "onnx")]
 use ort::value::Value;
+#[cfg(feature = "onnx")]
+use std::sync::Mutex;
 
 /// Embedding dimensionality for all-MiniLM-L6-v2.
 pub const EMBEDDING_DIM: usize = 384;
@@ -365,7 +365,11 @@ impl Embedder {
         if shape.len() != 3 || shape[2] as usize != EMBEDDING_DIM {
             return Err(EmbedError::DimensionMismatch {
                 expected: EMBEDDING_DIM,
-                actual: if shape.len() == 3 { shape[2] as usize } else { 0 },
+                actual: if shape.len() == 3 {
+                    shape[2] as usize
+                } else {
+                    0
+                },
             });
         }
 

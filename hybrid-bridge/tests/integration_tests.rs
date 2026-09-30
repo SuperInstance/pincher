@@ -26,14 +26,14 @@
 //! 6. **Edge Cases** — Empty ticker list, zero-length proposals, freeze/recover,
 //!    large ticker counts.
 
-use hybrid_bridge::{
-    detect_non_finite, mask_non_finite, HybridBridge, HybridMessage, MatrixEngineTrait,
-    MatrixSnapshot, RoomAgentTrait, RoomProposal, SaepAction, SaepConstraint,
-    TernaryGate, VetoEngineTrait, Violation, GovernanceLayer,
-};
 use hybrid_bridge::mock_matrix::MockMatrixEngine;
 use hybrid_bridge::mock_room::MockRoomAgent;
 use hybrid_bridge::mock_veto::MockVetoEngine;
+use hybrid_bridge::{
+    detect_non_finite, mask_non_finite, GovernanceLayer, HybridBridge, HybridMessage,
+    MatrixEngineTrait, MatrixSnapshot, RoomAgentTrait, RoomProposal, SaepAction, SaepConstraint,
+    TernaryGate, VetoEngineTrait, Violation,
+};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -43,8 +43,7 @@ use std::time::Instant;
 
 /// Create a test matrix engine with pre-populated tickers.
 fn setup_matrix(tickers: &[&str], n_features: usize, n_history: usize) -> MockMatrixEngine {
-    let engine = MockMatrixEngine::new(tickers.len(), n_features, n_history)
-        .with_tickers(tickers);
+    let engine = MockMatrixEngine::new(tickers.len(), n_features, n_history).with_tickers(tickers);
     engine.seed_random();
     engine
 }
@@ -65,11 +64,7 @@ fn collect_proposals(rooms: &[MockRoomAgent], snapshot: &MatrixSnapshot) -> Vec<
     let rt = tokio::runtime::Runtime::new().unwrap();
     rooms
         .iter()
-        .map(|room| {
-            rt.block_on(
-                room.analyze(snapshot, None, None),
-            )
-        })
+        .map(|room| rt.block_on(room.analyze(snapshot, None, None)))
         .collect()
 }
 
@@ -79,8 +74,7 @@ fn collect_proposals(rooms: &[MockRoomAgent], snapshot: &MatrixSnapshot) -> Vec<
 
 #[test]
 fn test_data_ingestion_updates_tensor() {
-    let engine = MockMatrixEngine::new(5, 3, 100)
-        .with_tickers(&["AAPL", "MSFT"]);
+    let engine = MockMatrixEngine::new(5, 3, 100).with_tickers(&["AAPL", "MSFT"]);
     engine.seed_random();
 
     // Ingest data — since tickers are pre-registered, check fast_cycle succeeds
@@ -102,7 +96,11 @@ fn test_tensor_non_finite_detection_after_ingestion() {
         let t = tensor.read().await;
         detect_non_finite(&t)
     });
-    assert_eq!(flagged.len(), 0, "Fresh tensor should have no non-finite values");
+    assert_eq!(
+        flagged.len(),
+        0,
+        "Fresh tensor should have no non-finite values"
+    );
 
     // Inject a NaN
     engine.inject_nan(0, 0, 0);
@@ -111,7 +109,11 @@ fn test_tensor_non_finite_detection_after_ingestion() {
         detect_non_finite(&t)
     });
     assert_eq!(flagged.len(), 1, "Should detect exactly one NaN");
-    assert_eq!(flagged[0], (0, 0, 0), "Coordinates should match injection point");
+    assert_eq!(
+        flagged[0],
+        (0, 0, 0),
+        "Coordinates should match injection point"
+    );
 }
 
 #[test]
@@ -138,9 +140,15 @@ fn test_room_agent_produces_valid_proposal_from_snapshot() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let proposal = rt.block_on(room.analyze(&snapshot, None, None));
 
-    assert_eq!(proposal.ticker, "TICKER0", "Proposal ticker must match agent");
+    assert_eq!(
+        proposal.ticker, "TICKER0",
+        "Proposal ticker must match agent"
+    );
     assert!(
-        matches!(proposal.gate, TernaryGate::Bullish | TernaryGate::Neutral | TernaryGate::Bearish),
+        matches!(
+            proposal.gate,
+            TernaryGate::Bullish | TernaryGate::Neutral | TernaryGate::Bearish
+        ),
         "Gate must be a valid TernaryGate"
     );
     assert!(
@@ -158,9 +166,15 @@ fn test_room_agent_produces_valid_proposal_from_snapshot() {
         "Matrix agreement must be in [0, 1], got {}",
         proposal.matrix_agreement
     );
-    assert!(!proposal.narrative_sig.is_empty(), "Narrative sig must not be empty");
+    assert!(
+        !proposal.narrative_sig.is_empty(),
+        "Narrative sig must not be empty"
+    );
     assert_eq!(proposal.timestamp, 42, "Timestamp must match snapshot tick");
-    assert!(!proposal.veto_override, "Default veto_override must be false");
+    assert!(
+        !proposal.veto_override,
+        "Default veto_override must be false"
+    );
 }
 
 #[test]
@@ -180,7 +194,10 @@ fn test_multiple_rooms_produce_diverse_proposals() {
 
     // All timestamps should match
     for proposal in &proposals {
-        assert_eq!(proposal.timestamp, 100, "All proposals should have same timestamp");
+        assert_eq!(
+            proposal.timestamp, 100,
+            "All proposals should have same timestamp"
+        );
     }
 }
 
@@ -240,7 +257,10 @@ fn test_veto_engine_resolves_simple_proposals() {
 
     // Check individual positions
     for pos in &portfolio.positions {
-        assert!((-1.0..=1.0).contains(&pos.weight), "Weight must be in [-1, 1]");
+        assert!(
+            (-1.0..=1.0).contains(&pos.weight),
+            "Weight must be in [-1, 1]"
+        );
         assert!(
             pos.veto_severity >= 0.0 && pos.veto_severity <= 1.0,
             "Veto severity must be in [0, 1]"
@@ -289,7 +309,11 @@ fn test_veto_engine_positions_reflect_gate_and_conviction() {
     let portfolio = rt.block_on(engine.resolve(&proposals, None));
 
     // AAPL should be positive (bullish * conviction)
-    let aapl = portfolio.positions.iter().find(|p| p.ticker == "AAPL").unwrap();
+    let aapl = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "AAPL")
+        .unwrap();
     assert!(
         aapl.weight > 0.0,
         "Bullish AAPL should have positive weight, got {}",
@@ -297,7 +321,11 @@ fn test_veto_engine_positions_reflect_gate_and_conviction() {
     );
 
     // MSFT should be negative (bearish * conviction)
-    let msft = portfolio.positions.iter().find(|p| p.ticker == "MSFT").unwrap();
+    let msft = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "MSFT")
+        .unwrap();
     assert!(
         msft.weight < 0.0,
         "Bearish MSFT should have negative weight, got {}",
@@ -305,7 +333,11 @@ fn test_veto_engine_positions_reflect_gate_and_conviction() {
     );
 
     // GOOGL should be ~0 (neutral)
-    let googl = portfolio.positions.iter().find(|p| p.ticker == "GOOGL").unwrap();
+    let googl = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "GOOGL")
+        .unwrap();
     assert!(
         googl.weight.abs() < 0.01,
         "Neutral GOOGL should have near-zero weight, got {}",
@@ -402,9 +434,7 @@ fn test_e2e_full_cycle_data_to_portfolio() {
     // Phase 3: Room analysis → Proposals
     let proposals = rooms
         .iter()
-        .map(|room| {
-            rt.block_on(room.analyze(&snapshot, None, None))
-        })
+        .map(|room| rt.block_on(room.analyze(&snapshot, None, None)))
         .collect::<Vec<_>>();
 
     assert_eq!(proposals.len(), 3);
@@ -491,7 +521,10 @@ fn test_e2e_bridge_broadcast_cycle() {
     let received = rt.block_on(rx.recv());
     match received {
         Ok(HybridMessage::SnapshotBroadcast(recv_snap)) => {
-            assert_eq!(recv_snap.tick, 1, "Received snapshot should have correct tick");
+            assert_eq!(
+                recv_snap.tick, 1,
+                "Received snapshot should have correct tick"
+            );
         }
         other => panic!("Expected SnapshotBroadcast, got: {:?}", other),
     }
@@ -503,7 +536,10 @@ fn test_e2e_bridge_broadcast_cycle() {
     }
 
     // Veto resolves
-    let proposals = rooms.iter().map(|r| rt.block_on(r.analyze(&snapshot, None, None))).collect::<Vec<_>>();
+    let proposals = rooms
+        .iter()
+        .map(|r| rt.block_on(r.analyze(&snapshot, None, None)))
+        .collect::<Vec<_>>();
     let portfolio = rt.block_on(veto.resolve(&proposals, None));
     bridge.broadcast_portfolio(portfolio.clone());
 
@@ -707,7 +743,11 @@ fn test_chaos_mixed_nan_inf_vetos_all_bad() {
 
     // Three bad proposals should all be vetoed to zero
     for ticker in &["AAPL", "MSFT", "GOOGL"] {
-        let pos = portfolio.positions.iter().find(|p| p.ticker == *ticker).unwrap();
+        let pos = portfolio
+            .positions
+            .iter()
+            .find(|p| p.ticker == *ticker)
+            .unwrap();
         assert!(
             pos.weight.abs() < 0.01,
             "{} with non-finite values should be vetoed to 0, got weight={}",
@@ -717,7 +757,11 @@ fn test_chaos_mixed_nan_inf_vetos_all_bad() {
     }
 
     // AMZN (clean) should have a non-zero weight
-    let amzn = portfolio.positions.iter().find(|p| p.ticker == "AMZN").unwrap();
+    let amzn = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "AMZN")
+        .unwrap();
     assert!(
         amzn.weight > 0.0,
         "Clean AMZN should have positive weight, got {}",
@@ -727,11 +771,7 @@ fn test_chaos_mixed_nan_inf_vetos_all_bad() {
 
 #[test]
 fn test_chaos_tensor_masking_recovers_downstream_computation() {
-    let engine = setup_matrix(
-        &["A", "B", "C", "D", "E", "F", "G", "H"],
-        5,
-        200,
-    );
+    let engine = setup_matrix(&["A", "B", "C", "D", "E", "F", "G", "H"], 5, 200);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -758,11 +798,17 @@ fn test_chaos_tensor_masking_recovers_downstream_computation() {
     // Now verify the matrix can still produce valid output
     let snapshot = rt.block_on(engine.full_cycle(100));
     assert_eq!(snapshot.n_stocks, 8);
-    assert!(snapshot.condition_number.is_finite(), "Condition number must be finite after masking");
+    assert!(
+        snapshot.condition_number.is_finite(),
+        "Condition number must be finite after masking"
+    );
 
     // Each topology should have finite confidence
     for topo in &snapshot.topologies {
-        assert!(topo.confidence.is_finite(), "All confidences must be finite after masking");
+        assert!(
+            topo.confidence.is_finite(),
+            "All confidences must be finite after masking"
+        );
     }
 }
 
@@ -835,8 +881,16 @@ fn test_edge_veto_override_reduces_impact() {
 
     let portfolio = rt.block_on(engine.resolve(&proposals, None));
 
-    let no_override = portfolio.positions.iter().find(|p| p.ticker == "NO_OVERRIDE").unwrap();
-    let with_override = portfolio.positions.iter().find(|p| p.ticker == "WITH_OVERRIDE").unwrap();
+    let no_override = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "NO_OVERRIDE")
+        .unwrap();
+    let with_override = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "WITH_OVERRIDE")
+        .unwrap();
 
     // Without override: veto severity = 1.0 → weight ≈ 0
     assert!(
@@ -909,7 +963,12 @@ fn test_edge_large_number_of_tickers() {
     let portfolio = rt.block_on(veto.resolve(&proposals, None));
     let elapsed = start.elapsed();
 
-    assert_eq!(portfolio.positions.len(), n, "Portfolio should have {} positions", n);
+    assert_eq!(
+        portfolio.positions.len(),
+        n,
+        "Portfolio should have {} positions",
+        n
+    );
     assert!(
         elapsed.as_millis() < 500,
         "100-proposal veto resolution should complete < 500ms, took {:?}",
@@ -967,7 +1026,11 @@ fn test_edge_custom_saep_constraint_built_at_runtime() {
 
     let portfolio = rt.block_on(engine.resolve(&proposals, None));
 
-    let hack = portfolio.positions.iter().find(|p| p.ticker == "HACK_ATTACK").unwrap();
+    let hack = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "HACK_ATTACK")
+        .unwrap();
     assert!(
         hack.weight.abs() < 0.01,
         "HACK ticker should be vetoed, got weight={}",
@@ -978,7 +1041,11 @@ fn test_edge_custom_saep_constraint_built_at_runtime() {
         "anti-hack constraint should fire"
     );
 
-    let safe = portfolio.positions.iter().find(|p| p.ticker == "SAFE_STOCK").unwrap();
+    let safe = portfolio
+        .positions
+        .iter()
+        .find(|p| p.ticker == "SAFE_STOCK")
+        .unwrap();
     assert!(
         safe.weight < 0.0,
         "Safe stock with bearish gate should have negative weight"

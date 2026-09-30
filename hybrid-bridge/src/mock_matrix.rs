@@ -4,9 +4,7 @@
 //! `MatrixEngine` trait with seed/inject capabilities for testing.
 
 use crate::engine::MatrixEngine;
-use crate::types::{
-    MatrixMetadata, MatrixSnapshot, PartialSnapshot, TopologicalSignature,
-};
+use crate::types::{MatrixMetadata, MatrixSnapshot, PartialSnapshot, TopologicalSignature};
 use async_trait::async_trait;
 use ndarray::{Array1, Array2, Array3};
 use std::sync::Arc;
@@ -104,11 +102,8 @@ impl MatrixEngine for MockMatrixEngine {
             .map(|(i, t)| {
                 let slice: Vec<f32> = tensor.slice(ndarray::s![i, 0, ..]).to_vec();
                 let mean = slice.iter().copied().sum::<f32>() / slice.len() as f32;
-                let var = slice
-                    .iter()
-                    .map(|v| (v - mean).powi(2))
-                    .sum::<f32>()
-                    / slice.len() as f32;
+                let var =
+                    slice.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / slice.len() as f32;
                 let conf = if var.is_finite() {
                     (1.0 - var.min(0.99)) as f64
                 } else {

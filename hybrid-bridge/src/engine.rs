@@ -10,9 +10,8 @@
 
 use crate::bridge::HybridBridge;
 use crate::types::{
-    FeatureSuggestion, FinalPosition, MatrixMetadata, MatrixSnapshot,
-    PartialSnapshot, PortfolioVector, RoomProposal, SaepAction, SaepConstraint, TernaryGate,
-    TopologicalSignature,
+    FeatureSuggestion, FinalPosition, MatrixMetadata, MatrixSnapshot, PartialSnapshot,
+    PortfolioVector, RoomProposal, SaepAction, SaepConstraint, TernaryGate, TopologicalSignature,
 };
 use async_trait::async_trait;
 use ndarray::Array1;
@@ -27,9 +26,9 @@ use tracing::{debug, info, instrument, trace, warn};
 // ─────────────────────────────────────────────────────────────────────
 
 /// Cycle counts for each matrix path.
-pub const FAST_CYCLE_INTERVAL: u64 = 1;   // every tick
+pub const FAST_CYCLE_INTERVAL: u64 = 1; // every tick
 pub const MEDIUM_CYCLE_INTERVAL: u64 = 5; // every 5 ticks
-pub const FULL_CYCLE_INTERVAL: u64 = 20;  // every 20 ticks
+pub const FULL_CYCLE_INTERVAL: u64 = 20; // every 20 ticks
 
 /// Maximum number of room agents that can analyze concurrently.
 pub const MAX_CONCURRENT_ROOMS: usize = 128;
@@ -316,7 +315,11 @@ impl<M: MatrixEngine + 'static, V: VetoEngine + 'static> HybridEngineImpl<M, V> 
         }
 
         let elapsed_ms = timer.elapsed().as_secs_f64() * 1000.0;
-        debug!(elapsed_ms, proposals = proposals.len(), "Room phase complete");
+        debug!(
+            elapsed_ms,
+            proposals = proposals.len(),
+            "Room phase complete"
+        );
         proposals
     }
 
@@ -482,8 +485,10 @@ where
         info!("HybridEngine shutting down...");
         self.shutdown.store(true, Ordering::Release);
         self.bridge.request_shutdown();
-        self.bridge
-            .emit_system_event("engine_shutdown".into(), "HybridEngine graceful shutdown".into());
+        self.bridge.emit_system_event(
+            "engine_shutdown".into(),
+            "HybridEngine graceful shutdown".into(),
+        );
     }
 }
 
@@ -531,7 +536,10 @@ impl VetoEngine for DefaultVetoEngine {
     async fn register_constraint(&mut self, constraint: SaepConstraint) {
         let id_clone = constraint.id.clone();
         let layer_clone = format!("{:?}", constraint.layer);
-        info!("Registered SAEP constraint: {} on {} layer", id_clone, layer_clone);
+        info!(
+            "Registered SAEP constraint: {} on {} layer",
+            id_clone, layer_clone
+        );
         self.constraints.push(constraint);
     }
 
@@ -545,16 +553,14 @@ impl VetoEngine for DefaultVetoEngine {
         if self.frozen.load(Ordering::Acquire) {
             let reason = self.freeze_reason.read().await;
             warn!("Veto engine is frozen: {:?}", reason);
-            return current_portfolio
-                .cloned()
-                .unwrap_or(PortfolioVector {
-                    positions: vec![],
-                    gross_exposure: 0.0,
-                    net_exposure: 0.0,
-                    sector_concentrations: HashMap::new(),
-                    portfolio_var: 0.0,
-                    timestamp: 0,
-                });
+            return current_portfolio.cloned().unwrap_or(PortfolioVector {
+                positions: vec![],
+                gross_exposure: 0.0,
+                net_exposure: 0.0,
+                sector_concentrations: HashMap::new(),
+                portfolio_var: 0.0,
+                timestamp: 0,
+            });
         }
 
         let mut final_positions = Vec::with_capacity(proposals.len());
@@ -669,9 +675,7 @@ impl VetoEngine for DefaultVetoEngine {
 mod tests {
     use super::*;
     use crate::types::TernaryGate;
-    use crate::{
-        GovernanceLayer, HybridMessage, Violation,
-    };
+    use crate::{GovernanceLayer, HybridMessage, Violation};
     use std::sync::Arc;
 
     // ── Mock Matrix Engine ──────────────────────────────────────────
@@ -709,9 +713,10 @@ mod tests {
                 tick,
                 n_stocks: 10,
                 eigenvalues: vec![0.9, 0.05, 0.03, 0.01, 0.01],
-                eigenvectors: ndarray::Array2::from_shape_vec((5, 2), vec![
-                    0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.3, 0.3,
-                ])
+                eigenvectors: ndarray::Array2::from_shape_vec(
+                    (5, 2),
+                    vec![0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.3, 0.3],
+                )
                 .unwrap(),
                 topologies: vec![],
                 universe_betti: [5, 2, 1],
@@ -890,11 +895,9 @@ mod tests {
         let matrix = MockMatrixEngine;
         let bridge = Arc::new(HybridBridge::new());
         let veto = DefaultVetoEngine::new();
-        let rooms: Vec<Box<dyn RoomAgent>> = vec![
-            Box::new(MockRoomAgent {
-                ticker: "AAPL".into(),
-            }),
-        ];
+        let rooms: Vec<Box<dyn RoomAgent>> = vec![Box::new(MockRoomAgent {
+            ticker: "AAPL".into(),
+        })];
 
         let config = HybridConfig::default();
         let engine = HybridEngineImpl::new(matrix, bridge, veto, rooms, config);
@@ -958,7 +961,9 @@ mod tests {
 
         // TSLA should be fully vetoed
         assert!((portfolio.positions[1].weight).abs() < 1e-10);
-        assert!(portfolio.positions[1].veto_applied.contains(&"no_bearish".to_string()));
+        assert!(portfolio.positions[1]
+            .veto_applied
+            .contains(&"no_bearish".to_string()));
         assert!((portfolio.positions[1].veto_severity - 1.0).abs() < 1e-6);
     }
 }

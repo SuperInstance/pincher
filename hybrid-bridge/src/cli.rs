@@ -24,8 +24,7 @@
 use crate::bridge::HybridBridge;
 use crate::error::{HybridError, HybridResult};
 use crate::types::{
-    HybridMessage, MatrixSnapshot, PortfolioVector, RoomProposal, TernaryGate,
-    TopologicalSignature,
+    HybridMessage, MatrixSnapshot, PortfolioVector, RoomProposal, TernaryGate, TopologicalSignature,
 };
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
@@ -281,7 +280,10 @@ impl HybridCli {
                 Ok(())
             }
             other => {
-                println!("⚠️  Received unexpected message variant: {}", other.variant_name());
+                println!(
+                    "⚠️  Received unexpected message variant: {}",
+                    other.variant_name()
+                );
                 println!("   (expected SnapshotBroadcast)");
                 Err(HybridError::Internal(format!(
                     "Expected SnapshotBroadcast, got {}",
@@ -341,10 +343,7 @@ impl HybridCli {
 
         println!(
             "✅ Proposal submitted for {} ({:?}) — conviction={:.2}, confidence={:.2}",
-            proposal.ticker,
-            proposal.gate,
-            proposal.conviction,
-            proposal.confidence
+            proposal.ticker, proposal.gate, proposal.conviction, proposal.confidence
         );
 
         Ok(())
@@ -358,7 +357,9 @@ impl HybridCli {
     /// subscribers (including the Veto Engine) should halt when they see it.
     pub fn freeze(&self, reason: &str) -> HybridResult<()> {
         if reason.trim().is_empty() {
-            return Err(HybridError::Internal("Freeze reason must not be empty".into()));
+            return Err(HybridError::Internal(
+                "Freeze reason must not be empty".into(),
+            ));
         }
 
         self.bridge
@@ -397,7 +398,10 @@ pub async fn run_hybrid_cli(cli: &HybridCli, cmd: HybridCliCommand) -> HybridRes
             gate,
             conviction,
             confidence,
-        } => cli.propose(&ticker, gate.into(), conviction, confidence).await,
+        } => {
+            cli.propose(&ticker, gate.into(), conviction, confidence)
+                .await
+        }
         HybridSubcommand::Freeze { reason } => cli.freeze(&reason),
         HybridSubcommand::Unfreeze { reason } => cli.unfreeze(&reason),
     }
@@ -428,9 +432,7 @@ fn print_snapshot(snapshot: &MatrixSnapshot) {
     );
     println!(
         "│  Universe Betti:       [{:>2}, {:>2}, {:>2}]               │",
-        snapshot.universe_betti[0],
-        snapshot.universe_betti[1],
-        snapshot.universe_betti[2]
+        snapshot.universe_betti[0], snapshot.universe_betti[1], snapshot.universe_betti[2]
     );
 
     // Eigenvalues (top 5)
@@ -499,7 +501,11 @@ fn print_topology_sample(topologies: &[TopologicalSignature]) {
             .iter()
             .map(|v| format!("{:.4}", v))
             .collect();
-        println!("│    Landscape (first {}): {}   │", n_pts, landscape_snip.join(", "));
+        println!(
+            "│    Landscape (first {}): {}   │",
+            n_pts,
+            landscape_snip.join(", ")
+        );
     }
 }
 
@@ -535,11 +541,7 @@ pub(crate) fn print_portfolio(portfolio: &PortfolioVector) {
             let weight_sign = if pos.weight > 0.0 { '+' } else { ' ' };
             println!(
                 "│    {} {}{:.4} (gate: {:?}, veto_sev: {:.2})      │",
-                pos.ticker,
-                weight_sign,
-                pos.weight,
-                pos.raw_gate,
-                pos.veto_severity
+                pos.ticker, weight_sign, pos.weight, pos.raw_gate, pos.veto_severity
             );
         }
         if portfolio.positions.len() > 10 {
@@ -594,8 +596,7 @@ mod tests {
     #[test]
     fn test_hybrid_cli_with_timeout() {
         let bridge = Arc::new(HybridBridge::new());
-        let cli = HybridCli::new(bridge.clone())
-            .with_timeout(Duration::from_secs(30));
+        let cli = HybridCli::new(bridge.clone()).with_timeout(Duration::from_secs(30));
         let _ = cli;
     }
 
@@ -655,9 +656,7 @@ mod tests {
         let bridge = Arc::new(HybridBridge::new());
         let cli = HybridCli::new(bridge);
 
-        let result = cli
-            .propose("AAPL", TernaryGate::Bullish, 0.8, 0.7)
-            .await;
+        let result = cli.propose("AAPL", TernaryGate::Bullish, 0.8, 0.7).await;
         assert!(result.is_ok());
     }
 
@@ -666,9 +665,7 @@ mod tests {
         let bridge = Arc::new(HybridBridge::new());
         let cli = HybridCli::new(bridge);
 
-        let result = cli
-            .propose("", TernaryGate::Bullish, 0.8, 0.7)
-            .await;
+        let result = cli.propose("", TernaryGate::Bullish, 0.8, 0.7).await;
         assert!(result.is_err());
     }
 
@@ -677,9 +674,7 @@ mod tests {
         let bridge = Arc::new(HybridBridge::new());
         let cli = HybridCli::new(bridge);
 
-        let result = cli
-            .propose("AAPL", TernaryGate::Bullish, 1.5, 0.7)
-            .await;
+        let result = cli.propose("AAPL", TernaryGate::Bullish, 1.5, 0.7).await;
         assert!(result.is_err());
     }
 
@@ -688,9 +683,7 @@ mod tests {
         let bridge = Arc::new(HybridBridge::new());
         let cli = HybridCli::new(bridge);
 
-        let result = cli
-            .propose("AAPL", TernaryGate::Bullish, 0.8, -0.1)
-            .await;
+        let result = cli.propose("AAPL", TernaryGate::Bullish, 0.8, -0.1).await;
         assert!(result.is_err());
     }
 
@@ -811,10 +804,8 @@ mod tests {
                 tick: 42,
                 n_stocks: 5,
                 eigenvalues: vec![0.95, 0.03, 0.02],
-                eigenvectors: ndarray::Array2::from_shape_vec((2, 2), vec![
-                    0.7, 0.7, -0.7, 0.7,
-                ])
-                .unwrap(),
+                eigenvectors: ndarray::Array2::from_shape_vec((2, 2), vec![0.7, 0.7, -0.7, 0.7])
+                    .unwrap(),
                 topologies: vec![],
                 universe_betti: [3, 1, 0],
                 regime: "rotation".into(),
@@ -823,7 +814,11 @@ mod tests {
         });
 
         let result = cli.snapshot(5).await;
-        assert!(result.is_ok(), "Expected Ok snapshot, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Expected Ok snapshot, got: {:?}",
+            result.err()
+        );
     }
 
     #[test]
