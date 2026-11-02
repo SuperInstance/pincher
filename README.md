@@ -137,6 +137,8 @@ pincher-core/src/
 └── dynamics/     # Carapace dynamics
 ```
 
+Two floors, one shell: the reflex engine PROPOSES matches; the veto floor DISPOSES. A match, however confident, never executes directly — execution requires a disposal: a capability-checked decision recorded by the veto floor. Confidence ranks candidates; it does not authorise them.
+
 #### Feature Flags
 
 | Flag | What It Unlocks |
